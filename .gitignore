@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+data/
+results/logs/
+results/runs/*.tmp
+results/sweep_status.json
+results_sweep_console.log
+
+# LaTeX build files
+paper/*.aux
+paper/*.log
+paper/*.out
+paper/*.bbl
+paper/*.blg
+paper/*.synctex.gz
+paper/build_stdout.log

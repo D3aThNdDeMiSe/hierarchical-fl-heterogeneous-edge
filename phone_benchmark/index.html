@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phone Training Benchmark</title>
+<style>
+  :root { --bg:#f7f7f5; --fg:#1d1d1b; --muted:#6b6b66; --card:#fff; --accent:#2457d6; --line:#e2e2dc; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#151514; --fg:#ecece8; --muted:#a3a39c; --card:#1f1f1d; --accent:#7aa2ff; --line:#33332f; } }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:16px; background:var(--bg); color:var(--fg); font:16px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  main { max-width:560px; margin:0 auto; }
+  h1 { font-size:1.3rem; margin:.2rem 0 .3rem; }
+  p { color:var(--muted); margin:.3rem 0 1rem; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:14px; }
+  label { display:block; font-size:.9rem; color:var(--muted); margin-bottom:6px; }
+  input { width:100%; padding:10px 12px; font-size:1rem; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--fg); }
+  button { width:100%; margin-top:12px; padding:14px; font-size:1.05rem; font-weight:600; border:0; border-radius:10px; background:var(--accent); color:#fff; }
+  button:disabled { opacity:.5; }
+  .big { font-size:2rem; font-weight:700; font-variant-numeric: tabular-nums; }
+  .row { display:flex; gap:12px; } .row > div { flex:1; }
+  .k { font-size:.85rem; color:var(--muted); }
+  #log { font:13px/1.4 ui-monospace, Menlo, Consolas, monospace; white-space:pre-wrap; color:var(--muted); }
+  textarea { width:100%; height:120px; font:13px ui-monospace, Menlo, Consolas, monospace; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--fg); padding:8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Phone training benchmark</h1>
+  <p>Trains the project's CNN (about 80k parameters, batch size 32) on random data and reports how long one training step takes. Keep the screen on, close other apps and plug the phone in. It takes about one minute.</p>
+
+  <div class="card">
+    <label for="name">Phone model</label>
+    <input id="name" placeholder="e.g. Redmi Note 12" autocomplete="off">
+    <button id="run">Run benchmark</button>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div><div class="k">Training step (median)</div><div class="big" id="train">–</div></div>
+      <div><div class="k">Inference, 1 sample</div><div class="big" id="infer">–</div></div>
+    </div>
+    <div id="log">Not started.</div>
+  </div>
+
+  <div class="card">
+    <label for="out">Result to send back (select all and copy)</label>
+    <textarea id="out" readonly></textarea>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const log = (s) => { $('log').textContent += '\n' + s; };
+const median = (a) => { const b = [...a].sort((x, y) => x - y); const m = b.length >> 1; return b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2; };
+
+// Same architecture as hfl/model.py (SmallCNN, 1x28x28 input, 10 classes).
+function buildModel() {
+  const m = tf.sequential();
+  m.add(tf.layers.conv2d({ inputShape: [28, 28, 1], filters: 16, kernelSize: 3, padding: 'same', activation: 'relu' }));
+  m.add(tf.layers.maxPooling2d({ poolSize: 2 }));
+  m.add(tf.layers.conv2d({ filters: 32, kernelSize: 3, padding: 'same', activation: 'relu' }));
+  m.add(tf.layers.maxPooling2d({ poolSize: 2 }));
+  m.add(tf.layers.flatten());
+  m.add(tf.layers.dense({ units: 48, activation: 'relu' }));
+  m.add(tf.layers.dense({ units: 10 }));
+  m.compile({ optimizer: tf.train.sgd(0.05), loss: (y, p) => tf.losses.softmaxCrossEntropy(y, p) });
+  return m;
+}
+
+// CPU backend: training kernels for conv layers exist on every phone, and it measures CPU
+// speed (as LiteRT on-device training would). Only ratios between phones are used.
+async function pickBackend() {
+  await tf.setBackend('cpu'); await tf.ready(); return 'cpu';
+}
+
+$('run').onclick = async () => {
+  $('run').disabled = true; $('log').textContent = 'Starting...';
+  try {
+    const backend = await pickBackend();
+    log('Backend: ' + backend + ', threads: ' + (navigator.hardwareConcurrency || '?'));
+    const model = buildModel();
+    log('Parameters: ' + model.countParams());
+    const B = 32;
+    const x = tf.randomNormal([B, 28, 28, 1]);
+    const y = tf.oneHot(tf.randomUniform([B], 0, 10, 'int32'), 10);
+
+    log('Warming up...');
+    for (let i = 0; i < 2; i++) await model.trainOnBatch(x, y);
+
+    const steps = [];
+    const budgetMs = 45000, maxSteps = 30;
+    const t0 = performance.now();
+    while (steps.length < maxSteps && performance.now() - t0 < budgetMs) {
+      const s = performance.now();
+      await model.trainOnBatch(x, y);
+      steps.push(performance.now() - s);
+      $('train').textContent = median(steps).toFixed(0) + ' ms';
+    }
+    log('Training steps measured: ' + steps.length);
+
+    const x1 = tf.randomNormal([1, 28, 28, 1]);
+    for (let i = 0; i < 3; i++) model.predict(x1).dataSync();
+    const inf = [];
+    for (let i = 0; i < 30; i++) { const s = performance.now(); model.predict(x1).dataSync(); inf.push(performance.now() - s); }
+
+    const res = {
+      phone: $('name').value || 'unnamed',
+      backend, threads: navigator.hardwareConcurrency || null,
+      train_step_ms_median: +median(steps).toFixed(1),
+      train_step_ms_min: +Math.min(...steps).toFixed(1),
+      train_steps_measured: steps.length,
+      infer_ms_median: +median(inf).toFixed(2),
+      batch_size: B, params: model.countParams(),
+      user_agent: navigator.userAgent
+    };
+    $('infer').textContent = res.infer_ms_median.toFixed(1) + ' ms';
+    $('out').value = JSON.stringify(res, null, 1);
+    log('Done. Copy the result below.');
+  } catch (e) {
+    log('Error: ' + e.message);
+  }
+  $('run').disabled = false;
+};
+</script>
+</body>
+</html>
