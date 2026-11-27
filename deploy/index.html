@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FL Model on Your Phone</title>
+<meta name="description" content="The global model trained by three-tier federated learning, running in your phone's browser.">
+<style>
+  :root {
+    --bg: #17151c; --panel: #221f29; --panel2: #2b2733; --line: #3a3542;
+    --ink: #f4f2f6; --soft: #c9c4d0; --muted: #9a94a3;
+    --rasp: #e0457b; --rasp-deep: #c8235a; --rasp-tint: #3a1d2a;
+    --good: #5cc98a; --bad: #ef6b6b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 20px 16px 48px; }
+  .kicker { color: var(--rasp); font: 600 12px/1.2 "Bahnschrift", system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase; }
+  h1 { font: 700 28px/1.15 "Bahnschrift", system-ui, sans-serif; margin: 8px 0 10px; }
+  p.lead { color: var(--soft); margin: 0 0 20px; line-height: 1.5; }
+  .card { background: var(--panel); border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+  .meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .meta div b { display: block; font: 700 22px/1.1 "Bahnschrift", system-ui, sans-serif; color: var(--ink); }
+  .meta div span { color: var(--muted); font-size: 13px; }
+  .small { color: var(--muted); font-size: 12.5px; line-height: 1.45; word-break: break-word; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .seg { display: inline-flex; background: var(--panel2); border-radius: 999px; padding: 3px; }
+  .seg button { border: 0; background: transparent; color: var(--soft); padding: 8px 14px; border-radius: 999px; font-size: 14px; cursor: pointer; }
+  .seg button.on { background: var(--rasp-deep); color: #fff; }
+  .btn { border: 0; background: var(--rasp-deep); color: #fff; font-weight: 600; font-size: 15px; padding: 12px 18px; border-radius: 12px; cursor: pointer; }
+  .btn.ghost { background: var(--panel2); color: var(--ink); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .results { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+  .results div { background: var(--panel2); border-radius: 12px; padding: 12px; }
+  .results b { display: block; font: 700 24px/1.1 "Bahnschrift", system-ui, sans-serif; color: var(--rasp); }
+  .results span { color: var(--soft); font-size: 13px; }
+  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+  @media (min-width: 560px) { .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .tile { background: var(--panel2); border-radius: 12px; padding: 8px; text-align: center; }
+  .tile canvas { width: 100%; max-width: 112px; aspect-ratio: 1; image-rendering: pixelated; border-radius: 6px; background: #000; }
+  .tile .pred { font-size: 13px; font-weight: 600; margin-top: 6px; }
+  .tile .pred.ok { color: var(--good); } .tile .pred.no { color: var(--bad); }
+  .tile .true { font-size: 11.5px; color: var(--muted); }
+  .status { color: var(--soft); font-size: 14px; min-height: 20px; margin-top: 10px; }
+  a { color: var(--rasp); }
+  footer { color: var(--muted); font-size: 12.5px; margin-top: 22px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<main>
+  <div class="kicker">Hierarchical federated learning · live demo</div>
+  <h1>The trained model, running on your phone</h1>
+  <p class="lead">This is the global model from our three-tier federated learning study. Twenty simulated phones
+    trained it under four Raspberry Pi-class gateways, and only model weights ever moved. Here it runs
+    entirely in your browser: no images leave this page.</p>
+
+  <section class="card">
+    <div class="meta">
+      <div><b id="m-version">…</b><span>model version</span></div>
+      <div><b id="m-params">…</b><span>parameters</span></div>
+      <div><b id="m-acc">…</b><span>test accuracy (10,000 images)</span></div>
+      <div><b id="m-size">…</b><span>download size</span></div>
+    </div>
+    <p class="small" id="m-source" style="margin:12px 0 0"></p>
+  </section>
+
+  <section class="card">
+    <div class="row">
+      <div class="seg" role="group" aria-label="Weights">
+        <button id="w-fp32" class="on">float32</button><button id="w-int8">int8 (4× smaller)</button>
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn" id="run">Classify 300 test images</button>
+      <button class="btn ghost" id="copy" disabled>Copy results</button>
+    </div>
+    <div class="status" id="status">Loading the model…</div>
+    <div class="results" id="results" hidden>
+      <div><b id="r-acc">–</b><span>correct on these 300</span></div>
+      <div><b id="r-agree">–</b><span>predictions identical to PyTorch on the laptop</span></div>
+      <div><b id="r-ms">–</b><span>per image (median, on this device)</span></div>
+      <div><b id="r-backend">–</b><span>TensorFlow.js backend</span></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="row" style="justify-content:space-between">
+      <b>What the model sees</b>
+      <button class="btn ghost" id="shuffle" disabled>Show 12 others</button>
+    </div>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <footer>
+    Fashion-MNIST test images, 30 per class. The int8 weights are converted back to float32 after download,
+    so they shrink the download, not the computation.<br>
+    Code, paper and all 192 experiment runs:
+    <a href="https://github.com/D3aThNdDeMiSe/hierarchical-fl-heterogeneous-edge">github.com/D3aThNdDeMiSe/hierarchical-fl-heterogeneous-edge</a><br>
+    <span id="device"></span>
+  </footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+let meta, samples, model, mode = 'fp32', lastResult = null;
+const loaded = {};
+
+function prod(a) { return a.reduce((x, y) => x * y, 1); }
+async function sha256hex(buf) {
+  if (!(window.crypto && crypto.subtle)) return null;  // needs https
+  const h = await crypto.subtle.digest('SHA-256', buf);
+  return [...new Uint8Array(h)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function fetchWeights(kind) {
+  if (loaded[kind]) return loaded[kind];
+  const info = meta.files[kind];
+  const buf = await (await fetch('model/' + info.file)).arrayBuffer();
+  const hash = await sha256hex(buf);
+  const arrays = {};
+  let off = 0;
+  if (kind === 'fp32') {
+    for (const L of meta.layout) { const n = prod(L.shape); arrays[L.name] = new Float32Array(buf.slice(off, off + 4 * n)); off += 4 * n; }
+  } else {
+    for (const L of meta.layout.filter((l) => l.name.endsWith('kernel'))) {
+      const n = prod(L.shape), q = new Int8Array(buf, off, n), s = meta.int8_scales[L.name], f = new Float32Array(n);
+      for (let i = 0; i < n; i++) f[i] = q[i] * s;
+      arrays[L.name] = f; off += n;
+    }
+    for (const L of meta.layout.filter((l) => l.name.endsWith('bias'))) {
+      const n = prod(L.shape); arrays[L.name] = new Float32Array(buf.slice(off, off + 4 * n)); off += 4 * n;
+    }
+  }
+  loaded[kind] = { arrays, bytes: buf.byteLength, verified: hash === null ? null : hash === info.sha256 };
+  return loaded[kind];
+}
+
+function buildModel() {
+  const m = tf.sequential();
+  m.add(tf.layers.conv2d({ inputShape: [28, 28, 1], filters: 16, kernelSize: 3, padding: 'same', activation: 'relu' }));
+  m.add(tf.layers.maxPooling2d({ poolSize: 2 }));
+  m.add(tf.layers.conv2d({ filters: 32, kernelSize: 3, padding: 'same', activation: 'relu' }));
+  m.add(tf.layers.maxPooling2d({ poolSize: 2 }));
+  m.add(tf.layers.flatten());
+  m.add(tf.layers.dense({ units: meta.layout[4].shape[1], activation: 'relu' }));
+  m.add(tf.layers.dense({ units: 10 }));
+  return m;
+}
+
+async function useWeights(kind) {
+  const w = await fetchWeights(kind);
+  model.setWeights(meta.layout.map((L) => tf.tensor(w.arrays[L.name], L.shape)));
+  mode = kind;
+  $('w-fp32').classList.toggle('on', kind === 'fp32');
+  $('w-int8').classList.toggle('on', kind === 'int8');
+  const kb = (w.bytes / 1024).toFixed(0);
+  $('m-size').textContent = kb + ' KB';
+  $('m-acc').textContent = (100 * (kind === 'fp32' ? meta.test_acc_fp32 : meta.test_acc_int8)).toFixed(2) + '%';
+  const check = w.verified === null ? 'checksum not checked (needs https)' : (w.verified ? 'SHA-256 verified ✓' : 'SHA-256 MISMATCH');
+  $('m-source').textContent = `Exported ${meta.exported} from run ${meta.source_run}. ${meta.training}. ${kind} weights: ${check}.`;
+}
+
+function pixels(i) {
+  const s = atob(samples.pixels_b64[i]); const a = new Uint8Array(784);
+  for (let k = 0; k < 784; k++) a[k] = s.charCodeAt(k);
+  return a;
+}
+function toInput(idxs) {
+  const x = new Float32Array(idxs.length * 784);
+  idxs.forEach((i, j) => { const p = pixels(i); for (let k = 0; k < 784; k++) x[j * 784 + k] = (p[k] / 255 - meta.input.mean) / meta.input.std; });
+  return tf.tensor4d(x, [idxs.length, 28, 28, 1]);
+}
+
+function drawTile(i, pred, prob) {
+  const t = document.createElement('div'); t.className = 'tile';
+  const c = document.createElement('canvas'); c.width = 28; c.height = 28;
+  const ctx = c.getContext('2d'); const img = ctx.createImageData(28, 28); const p = pixels(i);
+  for (let k = 0; k < 784; k++) { img.data[4 * k] = img.data[4 * k + 1] = img.data[4 * k + 2] = p[k]; img.data[4 * k + 3] = 255; }
+  ctx.putImageData(img, 0, 0);
+  const ok = pred === samples.labels[i];
+  const d1 = document.createElement('div'); d1.className = 'pred ' + (ok ? 'ok' : 'no');
+  d1.textContent = (ok ? '✓ ' : '✗ ') + meta.classes[pred] + ' ' + Math.round(100 * prob) + '%';
+  const d2 = document.createElement('div'); d2.className = 'true'; d2.textContent = ok ? ' ' : 'is: ' + meta.classes[samples.labels[i]];
+  t.append(c, d1, d2);
+  return t;
+}
+
+async function showGallery() {
+  const idxs = [];
+  while (idxs.length < 12) { const i = Math.floor(Math.random() * samples.n); if (!idxs.includes(i)) idxs.push(i); }
+  const x = toInput(idxs); const y = tf.softmax(model.predict(x));
+  const pr = await y.array(); x.dispose(); y.dispose();
+  const g = $('grid'); g.replaceChildren();
+  idxs.forEach((i, j) => { const p = pr[j]; const k = p.indexOf(Math.max(...p)); g.append(drawTile(i, k, p[k])); });
+}
+
+async function classifyAll() {
+  $('run').disabled = true; $('status').textContent = 'Classifying…';
+  const all = [...Array(samples.n).keys()];
+  const x = toInput(all); const y = model.predict(x);
+  const pred = await y.argMax(1).array(); x.dispose(); y.dispose();
+  const ref = mode === 'fp32' ? samples.pred_fp32 : samples.pred_int8;
+  let correct = 0, agree = 0;
+  pred.forEach((p, i) => { if (p === samples.labels[i]) correct++; if (p === ref[i]) agree++; });
+  // single-image latency, the way a phone app would use the model
+  const times = [];
+  for (let i = 0; i < samples.n; i++) {
+    const xi = toInput([i]); const t0 = performance.now(); const yi = model.predict(xi); await yi.data();
+    if (i >= 5) times.push(performance.now() - t0); xi.dispose(); yi.dispose();
+  }
+  times.sort((a, b) => a - b); const med = times[Math.floor(times.length / 2)];
+  $('r-acc').textContent = (100 * correct / samples.n).toFixed(1) + '%';
+  $('r-agree').textContent = agree + ' / ' + samples.n;
+  $('r-ms').textContent = med.toFixed(1) + ' ms';
+  $('r-backend').textContent = tf.getBackend();
+  $('results').hidden = false; $('copy').disabled = false; $('run').disabled = false;
+  $('status').textContent = 'Done. Switch weights and run again to compare.';
+  lastResult = { version: meta.version, weights: mode, backend: tf.getBackend(), correct, n: samples.n, agree_with_pytorch: agree,
+    median_ms_per_image: +med.toFixed(2), threads: navigator.hardwareConcurrency || null, user_agent: navigator.userAgent };
+}
+
+(async () => {
+  $('device').textContent = 'This device: ' + navigator.userAgent;
+  try {
+    meta = await (await fetch('model/model.json')).json();
+    samples = await (await fetch('samples.json')).json();
+    try { await tf.setBackend('webgl'); await tf.ready(); } catch (e) { await tf.setBackend('cpu'); await tf.ready(); }
+    $('m-version').textContent = 'v' + meta.version;
+    $('m-params').textContent = meta.params.toLocaleString('en-US');
+    model = buildModel();
+    await useWeights('fp32');
+    await showGallery();
+    $('status').textContent = 'Ready. Backend: ' + tf.getBackend() + '.';
+    $('shuffle').disabled = false;
+  } catch (e) { $('status').textContent = 'Could not load the model: ' + e.message; return; }
+  $('run').onclick = classifyAll;
+  $('shuffle').onclick = showGallery;
+  $('w-fp32').onclick = async () => { await useWeights('fp32'); $('results').hidden = true; await showGallery(); };
+  $('w-int8').onclick = async () => { await useWeights('int8'); $('results').hidden = true; await showGallery(); };
+  $('copy').onclick = async () => {
+    try { await navigator.clipboard.writeText(JSON.stringify(lastResult, null, 1)); $('status').textContent = 'Results copied.'; }
+    catch (e) { $('status').textContent = JSON.stringify(lastResult); }
+  };
+})();
+</script>
+</body>
+</html>

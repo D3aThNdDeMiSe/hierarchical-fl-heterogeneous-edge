@@ -35,7 +35,7 @@ This repository has the simulator we built to find that out, the 192 experiments
 | **Is the edge tier worth it?** | Yes. Same accuracy as flat FedAvg (p = 0.86) with **10× less traffic at the server**. |
 | **Do the slow-device mechanisms help?** | A deadline alone throws away about half the updates. Giving slow devices fewer local steps instead drops only 6%, reaches the target **30–42% sooner** and is the most accurate at equal time (+1.6 points, p = 0.017). It ends 1.35 points lower after an equal number of rounds, and a looser deadline recovers most of that. FedProx has no effect at μ = 0.01 and slows training at larger μ. |
 | **What breaks first as it scales?** | The gateway's shared Wi-Fi, well before its CPU or memory. At 25 devices per gateway, moving the model takes longer than training it. With our assumed Wi-Fi speed and step time the limit is about 10 devices per gateway; the paper gives a formula for other settings. |
-| **Does it hold up?** | With measured phone speeds the time saving grows to 42–57%. On CIFAR-10 the conclusions hold, with a sharper speed–accuracy trade-off under extreme skew. An int8 copy of the final model is 4× smaller (322 KB → 81 KB) and loses 0.05 points. |
+| **Does it hold up?** | With measured phone speeds the time saving grows to 42–57%. On CIFAR-10 the conclusions hold, with a sharper speed–accuracy trade-off under extreme skew. An int8 copy of the final model is 4× smaller (322 KB → 81 KB) with the same accuracy (88.1%), and it runs on any phone in the [live demo](https://d3athnddemise.github.io/hierarchical-fl-heterogeneous-edge/deploy/). |
 
 We timed training on 17 phones, from budget Android models to the iPhone 17 Pro Max. Leave out the fastest and slowest 10% and they still differ by **6×** in time per training step, and by 13× at the extremes (1.0 s on the iPhone 17 Pro Max, 13.9 s on a Galaxy A32). That's more than twice the 2.3× gap reported by the phone testbed we took our defaults from.
 
@@ -92,6 +92,19 @@ Time per training step on the 17 phones we measured. The orange bars are the thr
 `python demo.py` trains a small federation (2 gateways × 3 devices) in under a minute. It prints each device's tier and the classes it mostly holds, then one line per round while only weights cross the network.
 
 <p align="center"><img src="docs/assets/demo.gif" alt="Terminal recording of demo.py: device setup, then accuracy rising round by round" width="760"></p>
+
+## Try the trained model on your phone
+
+**[Open the live demo](https://d3athnddemise.github.io/hierarchical-fl-heterogeneous-edge/deploy/)** on any phone. The page downloads the global model that federated training produced (float32, or the int8 copy that is 4× smaller), checks its SHA-256 against the version record, and classifies 300 Fashion-MNIST test images in your browser. It reports accuracy, time per image on your device, and how many predictions match PyTorch's on the laptop exactly.
+
+On the PC side, `export_model.py` trains and exports the versioned model (it checks the PyTorch-to-TensorFlow.js layout conversion before writing anything), and `serve_model.py` serves it over HTTP:
+
+```bash
+python export_model.py          # about 7 minutes on a laptop GPU; writes deploy/model/
+python serve_model.py --port 8080
+curl http://localhost:8080/model                                   # version, source run, accuracy, hashes
+curl -X POST http://localhost:8080/predict -d '{"images": [[0, 0, ..., 0]]}'  # 784 pixel values per image
+```
 
 ## Engineering notes
 

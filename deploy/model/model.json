@@ -1,0 +1,108 @@
+{
+ "name": "hfl-hetero-edge global model",
+ "version": "1.0",
+ "exported": "2026-11-27",
+ "source_run": "fmnist_hier_proposed_a0.5_E4K5_mixed_s0",
+ "training": "proposed scheme (FedProx + deadline + adaptive workload), 4 gateways x 5 devices, 60 edge rounds, Dirichlet alpha = 0.5, seed 0, simulated",
+ "params": 80602,
+ "classes": [
+  "T-shirt/top",
+  "Trouser",
+  "Pullover",
+  "Dress",
+  "Coat",
+  "Sandal",
+  "Shirt",
+  "Sneaker",
+  "Bag",
+  "Ankle boot"
+ ],
+ "input": {
+  "shape": [
+   28,
+   28,
+   1
+  ],
+  "mean": 0.286,
+  "std": 0.353
+ },
+ "test_acc_fp32": 0.8809999823570251,
+ "test_acc_int8": 0.8814,
+ "files": {
+  "fp32": {
+   "file": "weights_fp32.bin",
+   "bytes": 322408,
+   "sha256": "41aaab49a6e4d0deae25ca3fd19c4ed6a944585b54e4cd6cc13589220b7dae78"
+  },
+  "int8": {
+   "file": "weights_int8.bin",
+   "bytes": 80920,
+   "sha256": "0a69cf19caf42ad82b7e236114a38c7bdb96fcd2c6ff8cb7d822510eb02b4e97"
+  }
+ },
+ "layout": [
+  {
+   "name": "conv1/kernel",
+   "shape": [
+    3,
+    3,
+    1,
+    16
+   ]
+  },
+  {
+   "name": "conv1/bias",
+   "shape": [
+    16
+   ]
+  },
+  {
+   "name": "conv2/kernel",
+   "shape": [
+    3,
+    3,
+    16,
+    32
+   ]
+  },
+  {
+   "name": "conv2/bias",
+   "shape": [
+    32
+   ]
+  },
+  {
+   "name": "dense1/kernel",
+   "shape": [
+    1568,
+    48
+   ]
+  },
+  {
+   "name": "dense1/bias",
+   "shape": [
+    48
+   ]
+  },
+  {
+   "name": "dense2/kernel",
+   "shape": [
+    48,
+    10
+   ]
+  },
+  {
+   "name": "dense2/bias",
+   "shape": [
+    10
+   ]
+  }
+ ],
+ "int8_scales": {
+  "conv1/kernel": 0.0063674673438072205,
+  "conv2/kernel": 0.0023955879732966423,
+  "dense1/kernel": 0.001640394562855363,
+  "dense2/kernel": 0.004232863429933786
+ },
+ "int8_format": "int8 kernels in layout order, then float32 little-endian biases in layout order"
+}
