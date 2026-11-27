@@ -23,8 +23,11 @@
   header nav { margin-top: 12px; display: flex; gap: 16px; flex-wrap: wrap; }
   header nav a { color: #f2b5c8; font-size: 14px; }
   .controls { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: end; margin: 18px 0 8px; }
-  label.ctl { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--muted); }
-  select { font: inherit; font-size: 14px; color: var(--ink); padding: 8px 10px; border: 1px solid #cfc9d6; border-radius: 10px; background: #fff; max-width: 100%; }
+  label.ctl { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--muted);
+    flex: 1 1 340px; min-width: 0; max-width: 100%; }
+  select { font: inherit; font-size: 14px; color: var(--ink); padding: 8px 10px; border: 1px solid #cfc9d6; border-radius: 10px; background: #fff;
+    width: 100%; min-width: 0; text-overflow: ellipsis; }
+  .seg { flex-wrap: wrap; }
   .seg { display: inline-flex; background: var(--panel); border-radius: 999px; padding: 3px; }
   .seg button { border: 0; background: transparent; color: var(--soft); padding: 7px 12px; border-radius: 999px; font-size: 13.5px; cursor: pointer; }
   .seg button.on { background: var(--ink); color: #fff; }
@@ -251,7 +254,8 @@ function draw() {
     const isFL = !['centralised', 'local'].includes(s.method);
     const tt = isFL && target ? toTarget(s.runs, target) : { t: '–', r: '–' };
     const ert = s.runs.map((r) => r.edge_round_s).filter((v) => v != null), agg = s.runs.map((r) => r.agg_ms).filter((v) => v != null);
-    const sd = Math.sqrt(mean(s.runs.map((r) => (r.h.acc[r.h.acc.length - 1] - last('acc')) ** 2)));
+    const n = s.runs.length;  // sample standard deviation over seeds, as in the paper's tables
+    const sd = n > 1 ? Math.sqrt(s.runs.map((r) => (r.h.acc[r.h.acc.length - 1] - last('acc')) ** 2).reduce((a, b) => a + b, 0) / (n - 1)) : 0;
     const cells = [s.label, s.runs.length, `${(100 * last('acc')).toFixed(1)}% ± ${(100 * sd).toFixed(1)}`, pct(last('p10')), tt.t, tt.r,
       isFL ? last('t').toFixed(0) : '–', isFL ? last('srv').toFixed(1) : '–', isFL ? last('lan').toFixed(1) : '–',
       isFL ? (100 * last('drop') / Math.max(1, last('upd'))).toFixed(1) + '%' : '–',
