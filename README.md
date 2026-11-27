@@ -95,7 +95,7 @@ Time per training step on the 17 phones we measured. The orange bars are the thr
 
 ## Try the trained model on your phone
 
-**[Open the live demo](https://d3athnddemise.github.io/hierarchical-fl-heterogeneous-edge/deploy/)** on any phone. The page downloads the global model that federated training produced (float32, or the int8 copy that is 4× smaller), checks its SHA-256 against the version record, and classifies 300 Fashion-MNIST test images in your browser. It reports accuracy, time per image on your device, and how many predictions match PyTorch's on the laptop exactly. On an Android phone it matched PyTorch on all 300 images, with both weight files, at 9–13 ms per image.
+**[Open the live demo](https://d3athnddemise.github.io/hierarchical-fl-heterogeneous-edge/deploy/)** on any phone. The page downloads the global model that federated training produced (float32, or the int8 copy that is 4× smaller), checks its SHA-256 against the version record, and classifies 300 Fashion-MNIST test images in your browser. It reports accuracy, time per image on your device, and how many predictions match PyTorch's on the laptop exactly. On a Redmi Note 12, a mid-range Android phone, it matched PyTorch on all 300 images, with both weight files, at 9–13 ms per image.
 
 On the PC side, `export_model.py` trains and exports the versioned model (it checks the PyTorch-to-TensorFlow.js layout conversion before writing anything), and `serve_model.py` serves it over HTTP:
 

@@ -1,5 +1,6 @@
 {
- "note": "Results copied from the live phone page (deploy/index.html on GitHub Pages) on an Android phone, 2026-11-27.",
+ "note": "Results copied from the live phone page (deploy/index.html on GitHub Pages) on a Redmi Note 12 (Opera browser), 2026-11-27.",
+ "phone": "Redmi Note 12",
  "runs": [
   {
    "version": "1.0",
