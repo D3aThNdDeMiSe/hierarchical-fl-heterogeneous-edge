@@ -73,9 +73,9 @@ FedProx: μ = 0.01.
 | Parameter | Value | Source |
 |---|---|---|
 | Device tiers | low / mid / high | Proposal (budget / mid-range / flagship) |
-| Time per step, high tier | t_high | Calibrated: own phones (`phone_benchmark`), else **assumption** 20 ms |
-| Low/high compute ratio | 2.3× | CoLExT [4]: OnePlus Nord 2T vs Pixel 7 round time |
-| Mid tier | measured on own mid phone, else geometric mean of low and high (1.52×) | own phone / **assumption** |
+| Time per step, high tier | t_high = 20 ms | **assumption** (sets the time scale only) |
+| Low/high compute ratio | 2.3× (literature profile); 5.06× (measured profile) | CoLExT [4]: OnePlus Nord 2T vs Pixel 7; own phones: Vivo Y31 vs Xiaomi POCO F3 |
+| Mid/high compute ratio | 1.52× (literature, geometric mean); 2.90× (measured) | **assumption**; own phones: Redmi Note 12 vs POCO F3 |
 | Per-round speed jitter | multiplicative log-normal, σ = 0.2 | **assumption** (throttling, background load; CoLExT [4] reports run-to-run variation) |
 | Phone WAN uplink (flat FL) | high 20, mid 12, low 6.25 Mbit/s | high/low ratio 3.2× from CoLExT [4] (Xiaomi 12 upload); absolute values **assumption** |
 | Gateway Wi-Fi LAN (shared by its K clients) | 50 Mbit/s total, fair share 50/K per client | **assumption** (Pi 4 onboard 802.11ac, practical throughput) |
@@ -136,6 +136,19 @@ maximum local computation. Evaluation happens at every global sync (flat: every 
   methods {hier_fedavg, hier_fedprox_dl, hier_proposed}, seeds {0, 1, 2}.
 - **G3 scaling** (RQ4): α=0.5, tiers `mixed`, (E, K) ∈ {(4,10), (4,25), (2,5), (10,5)},
   methods {flat_fedavg, hier_fedavg, hier_proposed}, seeds {0, 1}.
+- **G4 measured profile** (RQ1, robustness of RQ3): as G1 (E=4, K=5, tiers `mixed`,
+  α ∈ {0.1, 0.5, 1.0}) but with speed ratios measured on our phones
+  (`phone_benchmark/measurements.json`: POCO F3 1.0, Redmi Note 12 2.90, Vivo Y31 5.06),
+  methods {hier_fedavg, hier_fedprox_dl, hier_proposed}, seeds {0, 1, 2}. 27 runs; 138 in total.
+
+- **G5 deadline sensitivity** (RQ3): hier_proposed with deadline quantile q ∈ {0.75, 0.9}
+  (q = 0.5 is in G1), α ∈ {0.1, 0.5}, seeds {0, 1, 2}. 12 runs.
+- **G6 CIFAR-10** (second dataset shared by FedAda, FedUC, ESPerHFL, MTGC): E=4, K=5, tiers `mixed`,
+  α ∈ {0.1, 0.5}, methods {centralised, flat_fedavg, hier_fedavg, hier_fedprox_dl, hier_proposed},
+  seeds {0, 1, 2}. SmallCNN with 3 input channels and hidden 40 (87,458 params). 30 runs; 180 in total.
+
+Phone measurements (TF.js CPU backend, batch 32, median ms/step; inference ms/sample):
+POCO F3 1,607 / 3.8; Redmi Note 12 4,665 / 9.3; Vivo Y31 8,124 / 25.5.
 
 Results are reported as mean ± std over seeds; method differences are checked with paired
 t-tests over seeds and α settings.

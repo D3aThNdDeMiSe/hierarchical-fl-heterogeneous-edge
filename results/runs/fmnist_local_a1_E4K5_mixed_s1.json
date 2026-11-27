@@ -1,0 +1,105 @@
+{
+ "name": "fmnist_local_a1_E4K5_mixed_s1",
+ "config": {
+  "method": "local",
+  "dataset": "fmnist",
+  "alpha": 1.0,
+  "gateways": 4,
+  "clients_per_gateway": 5,
+  "tiers": "mixed",
+  "seed": 1,
+  "rounds": 60,
+  "kappa2": 2,
+  "batch_size": 32,
+  "lr": 0.05,
+  "mu": 0.01,
+  "tau_min_frac": 0.1,
+  "safety_quantile": 0.9,
+  "deadline_quantile": 0.5,
+  "data_root": "data",
+  "profile": "colext"
+ },
+ "method_spec": {
+  "topo": "local"
+ },
+ "history": [
+  {
+   "round": 60,
+   "sim_time": 0.0,
+   "bytes_server": 0,
+   "bytes_edge": 0,
+   "updates": 0,
+   "dropped": 0,
+   "steps": 113100,
+   "wasted_steps": 0,
+   "acc": 0.7270399838685989,
+   "loss": NaN,
+   "client_acc_mean": 0.8928150981664658,
+   "client_acc_p10": 0.8482516646385193,
+   "client_acc_min": 0.7772867679595947,
+   "client_acc_std": 0.0394835410073729
+  }
+ ],
+ "final": {
+  "round": 60,
+  "sim_time": 0.0,
+  "bytes_server": 0,
+  "bytes_edge": 0,
+  "updates": 0,
+  "dropped": 0,
+  "steps": 113100,
+  "wasted_steps": 0,
+  "acc": 0.7270399838685989,
+  "loss": NaN,
+  "client_acc_mean": 0.8928150981664658,
+  "client_acc_p10": 0.8482516646385193,
+  "client_acc_min": 0.7772867679595947,
+  "client_acc_std": 0.0394835410073729
+ },
+ "best_acc": 0.7270399838685989,
+ "setup": {
+  "n_clients": 20,
+  "model_params": 80602,
+  "model_bytes": 322408,
+  "tier_counts": {
+   "low": 7,
+   "mid": 7,
+   "high": 6
+  },
+  "samples_per_client": {
+   "min": 1505,
+   "median": 3181.5,
+   "max": 3945
+  },
+  "step_source": "CoLExT ratio; mid tier = geometric mean (assumption)",
+  "step_s": {
+   "high": 0.02,
+   "mid": 0.0303315017762062,
+   "low": 0.046
+  },
+  "device": "NVIDIA GeForce RTX 5060 Laptop GPU",
+  "local_global_acc_per_client": [
+   0.8039000034332275,
+   0.7795999646186829,
+   0.8107999563217163,
+   0.8208999633789062,
+   0.7376999855041504,
+   0.8095999956130981,
+   0.5740000009536743,
+   0.6978999972343445,
+   0.828499972820282,
+   0.7915999889373779,
+   0.7602999806404114,
+   0.5530999898910522,
+   0.8175999522209167,
+   0.796999990940094,
+   0.7566999793052673,
+   0.7797999978065491,
+   0.6359999775886536,
+   0.617900013923645,
+   0.3791999816894531,
+   0.7886999845504761
+  ]
+ },
+ "wall_time_s": 351.46218752861023
+}

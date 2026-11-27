@@ -1,0 +1,11 @@
+{
+ "config": "fmnist_hier_proposed_a0.5_E4K5_mixed_s0",
+ "params": 80602,
+ "fp32_bytes": 322408,
+ "int8_bytes": 80936,
+ "compression": 3.983493130374617,
+ "acc_fp32": 0.8814,
+ "acc_int8": 0.8809,
+ "acc_change_points": -0.04999999999999449,
+ "run_final_acc": 0.8813999891281128
+}

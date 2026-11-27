@@ -43,16 +43,35 @@ def grid():
             for E, K in ((4, 10), (4, 25), (2, 5), (10, 5)):
                 for m in ("flat_fedavg", "hier_fedavg", "hier_proposed"):
                     jobs.append(dict(group="G3", method=m, alpha="0.5", E=E, K=K, tiers="mixed", seed=seed))
+        # G4 measured device profile (speed ratios from our own phones): RQ1, robustness of RQ3
+        for alpha in ("0.1", "0.5", "1.0"):
+            for m in ("hier_fedavg", "hier_fedprox_dl", "hier_proposed"):
+                jobs.append(dict(group="G4", method=m, alpha=alpha, E=4, K=5, tiers="mixed", seed=seed,
+                                 profile="measured"))
+        # G5 deadline sensitivity (RQ3): looser deadlines for the proposed scheme (q = 0.5 is in G1)
+        for alpha in ("0.1", "0.5"):
+            for dq in (0.75, 0.9):
+                jobs.append(dict(group="G5", method="hier_proposed", alpha=alpha, E=4, K=5, tiers="mixed",
+                                 seed=seed, dq=dq))
+        # G6 CIFAR-10 (the other dataset shared by the base papers): main configuration
+        for alpha in ("0.1", "0.5"):
+            for m in ("centralised", "flat_fedavg", "hier_fedavg", "hier_fedprox_dl", "hier_proposed"):
+                jobs.append(dict(group="G6", method=m, alpha=alpha, E=4, K=5, tiers="mixed", seed=seed,
+                                 dataset="cifar10"))
     for j in jobs:
+        j.setdefault("profile", "colext")
+        j.setdefault("dq", 0.5)
+        j.setdefault("dataset", "fmnist")
         j["name"] = Config(method=j["method"], alpha=None if j["alpha"] == "iid" else float(j["alpha"]),
-                           gateways=j["E"], clients_per_gateway=j["K"], tiers=j["tiers"], seed=j["seed"]).name
+                           gateways=j["E"], clients_per_gateway=j["K"], tiers=j["tiers"], seed=j["seed"],
+                           profile=j["profile"], deadline_quantile=j["dq"], dataset=j["dataset"]).name
     return jobs
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--workers", type=int, default=5)
-    ap.add_argument("--groups", default="G1,G2,G3")
+    ap.add_argument("--groups", default="G1,G2,G3,G4,G5")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
 
@@ -89,7 +108,8 @@ def main():
         if i < a.workers:
             time.sleep(4 * i)  # stagger CUDA initialisation; simultaneous starts can fail on Windows
         args = [sys.executable, os.path.join(ROOT, "run.py"), "--method", j["method"], "--alpha", j["alpha"],
-                "--E", str(j["E"]), "--K", str(j["K"]), "--tiers", j["tiers"], "--seed", str(j["seed"])]
+                "--E", str(j["E"]), "--K", str(j["K"]), "--tiers", j["tiers"], "--seed", str(j["seed"]),
+                "--profile", j["profile"], "--deadline-q", str(j["dq"]), "--dataset", j["dataset"]]
         with lock:
             state["running"].append(j["name"])
             write_status()

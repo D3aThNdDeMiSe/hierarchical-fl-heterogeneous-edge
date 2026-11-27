@@ -1,0 +1,6 @@
+{
+ "note": "Additional phones measured with phone_benchmark (TF.js CPU backend, batch 32, SmallCNN 80,602 params). Kept apart from measurements.json, which feeds the G4 runs. Used for the phone-speed figure and, if the tiers change, a separate measured profile.",
+ "phones": [
+  {"phone": "Samsung Galaxy S24 Ultra", "train_step_ms_median": 1430.0, "train_step_ms_min": 1379.8, "train_steps_measured": 30, "infer_ms_median": 3.3, "threads": 8, "browser": "Chrome 158", "date": "2026-11-27"}
+ ]
+}

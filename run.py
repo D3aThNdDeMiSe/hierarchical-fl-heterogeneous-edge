@@ -19,12 +19,16 @@ def parse_args(argv=None):
     ap.add_argument("--E", type=int, default=4, help="number of gateways")
     ap.add_argument("--K", type=int, default=5, help="clients per gateway")
     ap.add_argument("--tiers", default="mixed", choices=["mixed", "mid", "low_heavy"])
+    ap.add_argument("--profile", default="colext", choices=["colext", "measured"],
+                    help="device speed ratios: literature (CoLExT) or measured on our phones")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--rounds", type=int, default=60)
     ap.add_argument("--kappa2", type=int, default=2)
     ap.add_argument("--bs", type=int, default=32)
     ap.add_argument("--lr", type=float, default=0.05)
     ap.add_argument("--mu", type=float, default=0.01)
+    ap.add_argument("--deadline-q", type=float, default=0.5,
+                    help="deadline = this quantile of the devices' expected full-epoch time")
     ap.add_argument("--out", default=os.path.join("results", "runs"))
     ap.add_argument("--force", action="store_true", help="rerun even if the result exists")
     return ap.parse_args(argv)
@@ -34,7 +38,8 @@ def main(argv=None):
     a = parse_args(argv)
     cfg = Config(method=a.method, dataset=a.dataset, alpha=None if a.alpha == "iid" else float(a.alpha),
                  gateways=a.E, clients_per_gateway=a.K, tiers=a.tiers, seed=a.seed, rounds=a.rounds,
-                 kappa2=a.kappa2, batch_size=a.bs, lr=a.lr, mu=a.mu)
+                 kappa2=a.kappa2, batch_size=a.bs, lr=a.lr, mu=a.mu, profile=a.profile,
+                 deadline_quantile=a.deadline_q)
     os.makedirs(a.out, exist_ok=True)
     path = os.path.join(a.out, cfg.name + ".json")
     if os.path.exists(path) and not a.force:

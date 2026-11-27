@@ -4,6 +4,10 @@ data/
 results/logs/
 results/runs/*.tmp
 results/sweep_status.json
+results/.claude_working
+results/preview/
+results/overnight_queue.log
+results_sweep_*console.log
 results_sweep_console.log
 
 # LaTeX build files

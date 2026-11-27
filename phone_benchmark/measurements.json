@@ -1,0 +1,8 @@
+{
+ "note": "Measured 2026-11-27 with phone_benchmark/index.html (TF.js CPU backend, batch 32, SmallCNN 80,602 params). Median ms per training step. Used by the 'measured' device profile (hfl/devices.py).",
+ "phones": [
+  {"tier": "high", "phone": "Xiaomi POCO F3", "train_step_ms_median": 1606.6, "train_step_ms_min": 1471.7, "train_steps_measured": 27, "infer_ms_median": 3.8, "threads": 8, "browser": "Chrome 158"},
+  {"tier": "mid", "phone": "Redmi Note 12", "train_step_ms_median": 4664.8, "train_step_ms_min": 4609.6, "train_steps_measured": 10, "infer_ms_median": 9.3, "threads": 8, "browser": "Opera 104 (Chromium 156)"},
+  {"tier": "low", "phone": "Vivo Y31", "train_step_ms_median": 8124.2, "train_step_ms_min": 6318.2, "train_steps_measured": 6, "infer_ms_median": 25.45, "threads": 8, "browser": "Chrome 158"}
+ ]
+}

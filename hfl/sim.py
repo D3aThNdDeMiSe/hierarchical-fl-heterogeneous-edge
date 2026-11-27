@@ -49,16 +49,20 @@ class Config:
     safety_quantile: float = 0.9       # adaptive workload plans for this quantile of speed jitter
     deadline_quantile: float = 0.5     # D = this quantile of clients' expected full-epoch time
     data_root: str = "data"
+    profile: str = "colext"            # device speed ratios: "colext" (literature) or "measured" (own phones)
 
     @property
     def name(self) -> str:
         a = "iid" if self.alpha is None else f"a{self.alpha:g}"
+        p = "" if self.profile == "colext" else f"_{self.profile}"
+        d = "" if self.deadline_quantile == 0.5 else f"_dq{self.deadline_quantile:g}"
         return (f"{self.dataset}_{self.method}_{a}_E{self.gateways}K{self.clients_per_gateway}"
-                f"_{self.tiers}_s{self.seed}")
+                f"_{self.tiers}{p}{d}_s{self.seed}")
 
 
-def run(cfg: Config, log=print) -> dict:
+def run(cfg: Config, log=print, return_weights: bool = False, on_eval=None) -> dict:
     spec = METHODS[cfg.method]
+    final_w = None  # final global weights (centralised / flat / hierarchical), for deployment checks
     wall0 = time.time()
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     torch.manual_seed(cfg.seed)
@@ -78,7 +82,7 @@ def run(cfg: Config, log=print) -> dict:
     idx = [torch.as_tensor(p, dtype=torch.long, device=dev) for p in parts]
     n_k = np.array([len(p) for p in parts], dtype=float)
     tiers = DV.assign_tiers(N, cfg.tiers, rng_tier)
-    step_s, step_src = DV.step_times()
+    step_s, step_src = DV.step_times(cfg.profile)
     t_nom = np.array([step_s[t] for t in tiers])
     groups = [g for g in np.array_split(rng_gw.permutation(N), E)]
     net = DV.NetConfig()
@@ -108,6 +112,8 @@ def run(cfg: Config, log=print) -> dict:
 
     def record(r, w):
         history.append(dict(round=r, **totals, **evaluate(w)))
+        if on_eval is not None:
+            on_eval(history[-1])
         if r % 10 == 0 or r == R:
             h = history[-1]
             log(f"  [{cfg.name}] round {r:3d}  acc {h['acc']:.4f}  p10 {h['client_acc_p10']:.4f}"
@@ -215,8 +221,12 @@ def run(cfg: Config, log=print) -> dict:
     else:
         raise ValueError(topo)
 
+    if topo in ("central", "flat"):
+        final_w = w
+    elif topo == "hier":
+        final_w = w_g
     final = history[-1]
-    return dict(
+    result = dict(
         name=cfg.name, config=asdict(cfg), method_spec=spec, history=history, final=final,
         best_acc=max(h["acc"] for h in history),
         setup=dict(n_clients=N, model_params=trainer.n_params, model_bytes=model_bytes,
@@ -226,3 +236,6 @@ def run(cfg: Config, log=print) -> dict:
                    **extra),
         wall_time_s=time.time() - wall0,
     )
+    if return_weights:
+        result["weights"] = None if final_w is None else final_w.detach().cpu()
+    return result

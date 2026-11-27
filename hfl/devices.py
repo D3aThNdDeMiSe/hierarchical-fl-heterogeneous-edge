@@ -30,7 +30,8 @@ TIER_MIXES = {
     "low_heavy": {"low": 0.6, "mid": 0.3, "high": 0.1},
 }
 
-CALIBRATION_FILE = os.path.join(os.path.dirname(__file__), "..", "phone_benchmark", "calibration.json")
+MEASUREMENTS_FILE = os.path.join(os.path.dirname(__file__), "..", "phone_benchmark", "measurements.json")
+PROFILES = ("colext", "measured")
 
 
 @dataclass
@@ -43,22 +44,24 @@ class NetConfig:
     gw_ram_bytes: float = 4e9        # Raspberry Pi 4 Model B (4 GB)
 
 
-def step_times(calibration_path: str | None = CALIBRATION_FILE) -> tuple[dict, str]:
+def step_times(profile: str = "colext") -> tuple[dict, str]:
     """Nominal seconds per local step for each tier, plus where the ratios came from.
 
-    Without calibration: low = 2.3x high (CoLExT), mid = geometric mean of the two.
-    With phone_benchmark/calibration.json ({"low_ms": .., "mid_ms": ..}) from our own
-    phones: the measured low/mid ratio places the mid tier; low stays 2.3x high.
+    "colext"   (default): low = 2.3x high (CoLExT), mid = geometric mean of the two.
+    "measured": ratios measured on our own phones (phone_benchmark/measurements.json):
+                Xiaomi POCO F3 (high), Redmi Note 12 (mid), Vivo Y31 (low).
+    The high tier is anchored at HIGH_TIER_STEP_S in both cases; only ratios matter.
     """
-    low = COLEXT_COMPUTE_GAP
-    mid = math.sqrt(COLEXT_COMPUTE_GAP)
-    source = "CoLExT ratio; mid tier = geometric mean (assumption)"
-    if calibration_path and os.path.exists(calibration_path):
-        with open(calibration_path) as f:
-            cal = json.load(f)
-        mid = low / (cal["low_ms"] / cal["mid_ms"])
-        source = f"CoLExT ratio; mid tier from own phones (low/mid = {cal['low_ms'] / cal['mid_ms']:.2f})"
-    rel = {"high": 1.0, "mid": mid, "low": low}
+    if profile == "colext":
+        rel = {"high": 1.0, "mid": math.sqrt(COLEXT_COMPUTE_GAP), "low": COLEXT_COMPUTE_GAP}
+        source = "CoLExT ratio; mid tier = geometric mean (assumption)"
+    elif profile == "measured":
+        with open(MEASUREMENTS_FILE) as f:
+            ms = {p["tier"]: p["train_step_ms_median"] for p in json.load(f)["phones"]}
+        rel = {t: ms[t] / ms["high"] for t in ("high", "mid", "low")}
+        source = "own phones: " + ", ".join(f"{t} {rel[t]:.2f}x" for t in ("high", "mid", "low"))
+    else:
+        raise ValueError(f"unknown device profile {profile!r}")
     return {t: HIGH_TIER_STEP_S * r for t, r in rel.items()}, source
 
 

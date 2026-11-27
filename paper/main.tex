@@ -48,7 +48,7 @@ Reg.\ No.\ I22-0532, I220532@nu.edu.pk}
 
 % ---------------------------------------------------------------------
 \begin{abstract}
-Federated learning (FL) keeps training data on the devices that produce it and exchanges only model weights, but real deployments must cope with devices whose compute speed, network links and data distributions differ widely. Hierarchical FL adds an edge tier that aggregates nearby devices before contacting the server, yet most hierarchical methods assume capable edge servers and model device heterogeneity synthetically. This paper studies a three-tier framework in which heterogeneous phones train locally, low-power Raspberry Pi-class gateways aggregate their updates, and a server combines the gateway models. Because physical gateways were not available, the gateways are emulated: a PyTorch simulator with a simulated clock and per-tier byte accounting uses device and gateway parameters taken from published measurements and from measurements of our own phones. On Fashion-MNIST with Dirichlet label skew, we compare centralised, local-only, flat FedAvg and hierarchical FedAvg baselines with a heterogeneity-aware scheme that combines FedProx, deadline-based partial aggregation, adaptive local workload and streaming aggregation at the gateway. The evaluation is organised around four research questions: the cost of heterogeneity, the value of the edge tier, the contribution of each mechanism, and scaling with the number of devices per gateway. It uses a fixed 4-gateway, 20-client configuration taken from the base papers and a sweep up to 100 clients and 10 gateways. \todo{headline results: accuracy gap to centralised, server-traffic reduction of the hierarchy, gain of the proposed scheme in 10th-percentile client accuracy and time-to-target.}
+Federated learning (FL) keeps training data on the devices that produce it and exchanges only model weights, but real deployments must cope with devices whose compute speed, network links and data distributions differ widely. Hierarchical FL adds an edge tier that aggregates nearby devices before contacting the server, yet most hierarchical methods assume capable edge servers and model device heterogeneity synthetically. This paper studies a three-tier framework in which heterogeneous phones train locally, low-power Raspberry Pi-class gateways aggregate their updates, and a server combines the gateway models. Because physical gateways were not available, the gateways are emulated: a PyTorch simulator with a simulated clock and per-tier byte accounting uses device and gateway parameters taken from published measurements and from measurements of our own phones. On Fashion-MNIST and CIFAR-10 with Dirichlet label skew, we compare centralised, local-only, flat FedAvg and hierarchical FedAvg baselines with a heterogeneity-aware scheme that combines FedProx, deadline-based partial aggregation, adaptive local workload and streaming aggregation at the gateway. The evaluation is organised around four research questions: the cost of heterogeneity, the value of the edge tier, the contribution of each mechanism, and scaling with the number of devices per gateway. It uses a fixed 4-gateway, 20-client configuration taken from the base papers and a sweep up to 100 clients and 10 gateways. Across 180 simulation runs, the edge tier matches flat FedAvg's accuracy while sending 10$\times$ less traffic through the server. Label skew costs up to 5.2 points against centralised training, borne mostly by the worst-served devices. Giving slow devices fewer local steps instead of dropping them reaches the target accuracy 30--42\% sooner than hierarchical FedAvg (42--57\% with the speeds measured on our phones) and gives the highest accuracy at equal elapsed time, although it ends 1.35 points lower after an equal number of rounds. A Pi-class gateway runs out of shared Wi-Fi bandwidth long before its CPU or memory, which suggests about ten devices per gateway.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -71,10 +71,10 @@ This paper studies these questions with a three-tier framework (Fig.~\ref{fig:ar
 \item A three-tier HFL framework with emulated Pi-class gateways, implemented as a reproducible PyTorch simulator with a simulated clock and per-tier byte accounting, in which every device and gateway parameter is documented with its source or marked as an assumption.
 \item A heterogeneity-aware training scheme that combines device profiling, adaptive local workload, deadline-based partial aggregation and FedProx, with memory-constant streaming aggregation at the gateway, evaluated as an ablation against standard baselines.
 \item An evaluation organised around four research questions, with a device-count design drawn from the base papers: a fixed main configuration and a sweep that gradually increases the number of devices per gateway and the number of gateways.
-\item Open-source code, experiment scripts and a browser-based benchmark for measuring per-step training time on real phones \todo{GitHub URL}.
+\item Open-source code, experiment scripts and a browser-based benchmark for measuring per-step training time on real phones (\url{https://github.com/D3aThNdDeMiSe/hierarchical-fl-heterogeneous-edge}).
 \end{itemize}
 
-\textit{Relation to the project proposal.} Following feedback on the proposal, we (i) replaced the activity-recognition datasets with the Fashion-MNIST benchmark used by our base papers (CIFAR-10 is left for future work), (ii) organised the evaluation around the research questions and report top-1 accuracy, as the base papers do, instead of macro-F1, and (iii) chose device counts from the base papers' setups (a fixed main configuration plus a scaling sweep). Because Raspberry Pi devices were not allotted, the edge tier is emulated with Pi-class resource profiles drawn from published measurements, and our phones are used to measure training speed rather than as live clients. As anticipated in the proposal's risk analysis, Flower provides no native multi-level aggregation, so the hierarchy is implemented in a lightweight simulator. The architecture, heterogeneity-aware mechanisms and baselines are unchanged.
+\textit{Relation to the project proposal.} Following feedback on the proposal, we (i) replaced the activity-recognition datasets with the Fashion-MNIST and CIFAR-10 benchmarks used by our base papers, (ii) organised the evaluation around the research questions and report top-1 accuracy, as the base papers do, instead of macro-F1, and (iii) chose device counts from the base papers' setups (a fixed main configuration plus a scaling sweep). Because Raspberry Pi devices were not allotted, the edge tier is emulated with Pi-class resource profiles drawn from published measurements, and our phones are used to measure training speed rather than as live clients. As anticipated in the proposal's risk analysis, Flower provides no native multi-level aggregation, so the hierarchy is implemented in a lightweight simulator. The architecture, heterogeneity-aware mechanisms and baselines are unchanged.
 
 The rest of the paper is organised as follows. Section~\ref{sec:related} reviews related work and identifies the gap, Section~\ref{sec:problem} states the problem and research questions, Section~\ref{sec:method} describes the method, Section~\ref{sec:setup} the experimental setup, and Section~\ref{sec:results} the results. Section~\ref{sec:discussion} discusses limitations and Section~\ref{sec:conclusion} concludes.
 
@@ -202,7 +202,7 @@ w = \sum_{e=1}^{E} \frac{n_e}{n} w_e ,
 where $\mathcal{S}_e \subseteq \mathcal{C}_e$ is the set of updates accepted in that edge round. If no update of a gateway is accepted, the gateway keeps its previous edge model.
 
 \subsection{Data and Partitioning}
-We use Fashion-MNIST~\cite{xiao2017fmnist}: 60{,}000 training and 10{,}000 test greyscale images of $28\times 28$ pixels in ten balanced clothing classes, normalised with mean 0.2860 and standard deviation 0.3530. It is shared by four of our five hierarchical base papers (Table~\ref{tab:counts}). Statistical heterogeneity is controlled with Dirichlet label skew~\cite{hsu2019}: for each class, its samples are split across the $N$ clients with proportions drawn from $\mathrm{Dir}(\alpha)$, where a client that already holds its fair share receives no more of the class, resampling until every client holds at least 10 samples (the NIID-Bench procedure). We use $\alpha \in \{0.1, 0.5, 1.0\}$ (smaller is more skewed) and an IID split as a sanity check. Clients train on all of their samples; global accuracy is measured on the official test set.
+We use Fashion-MNIST~\cite{xiao2017fmnist}: 60{,}000 training and 10{,}000 test greyscale images of $28\times 28$ pixels in ten balanced clothing classes, normalised with mean 0.2860 and standard deviation 0.3530. It is shared by four of our five hierarchical base papers (Table~\ref{tab:counts}). As a harder second dataset we use CIFAR-10~\cite{krizhevsky2009} (50{,}000 training and 10{,}000 test colour images of $32\times 32$ pixels, ten classes), also used by four of the five. Statistical heterogeneity is controlled with Dirichlet label skew~\cite{hsu2019}: for each class, its samples are split across the $N$ clients with proportions drawn from $\mathrm{Dir}(\alpha)$, where a client that already holds its fair share receives no more of the class, resampling until every client holds at least 10 samples (the NIID-Bench procedure). We use $\alpha \in \{0.1, 0.5, 1.0\}$ (smaller is more skewed) and an IID split as a sanity check. Clients train on all of their samples; global accuracy is measured on the official test set.
 
 \subsection{Model and Local Training}
 The model is a compact convolutional network: Conv($1\!\rightarrow\!16$, $3\times3$) -- ReLU -- MaxPool(2) -- Conv($16\!\rightarrow\!32$, $3\times3$) -- ReLU -- MaxPool(2) -- FC($1568\!\rightarrow\!48$) -- ReLU -- FC($48\!\rightarrow\!10$). It has 80{,}602 parameters, so $\wsize = 322{,}408$~bytes (315~KiB) in float32, which meets the proposal's target of fewer than 100k parameters and under 1~MB. It has no batch normalisation, so weights are plain tensors and averaging is exact. Each device runs one local epoch per edge round with SGD (learning rate 0.05, batch size 32), i.e.\ $\tau_k^{\mathrm{full}} = \lceil n_k/32 \rceil$ steps, minimising
@@ -213,7 +213,7 @@ The model is a compact convolutional network: Conv($1\!\rightarrow\!16$, $3\time
 where $F_k$ is the cross-entropy loss on the device's data and $w_e^{t}$ is the edge model received at the start of the round. FedAvg uses $\mu = 0$ and FedProx~\cite{li2020fedprox} uses $\mu = 0.01$.
 
 \subsection{Device and Gateway Profiles}
-Table~\ref{tab:params} lists every system parameter with its source. Device speed ratios are taken from measurements on real phones: the low/high compute ratio of 2.3$\times$ and the high/low upload ratio of 3.2$\times$ come from CoLExT~\cite{bozic2024}. The mid tier is set from measurements of our own phones: we ran the same network in TensorFlow.js~\cite{smilkov2019tfjs} (CPU backend) in the browser of a low-end and a mid-range phone and measured the median time per training step with batch size 32. \todo{phone models and measured ms/step for both phones; resulting mid/low ratio. If not measured, state that the mid tier uses the geometric mean of the low and high tiers (1.52$\times$ the high tier).} Because the browser runtime differs from native on-device training, only the ratio between phones is used. The absolute scale ($t_{\mathrm{high}} = 20$~ms per step) is an assumption; it affects the balance between computation and communication time, not the ranking of methods. The gateway profile follows a Raspberry Pi~4 Model B with 4~GB RAM~\cite{rpi4brief}.
+Table~\ref{tab:params} lists every system parameter with its source. Device speed ratios come from measurements on real phones, in two profiles. The \emph{literature profile}, used in the main experiments, takes the low/high compute ratio of 2.3$\times$ and the high/low upload ratio of 3.2$\times$ from CoLExT~\cite{bozic2024}, with the mid tier at their geometric mean (1.52$\times$, an assumption). The \emph{measured profile} uses our own phones: we ran the same network in TensorFlow.js~\cite{smilkov2019tfjs} (CPU backend) in the browser of three phones and measured the median time per training step with batch size 32. A Xiaomi POCO F3 needed 1{,}607~ms, a Redmi Note 12 4{,}665~ms and a Vivo Y31 8{,}124~ms, giving high : mid : low ratios of 1 : 2.90 : 5.06, more than twice the spread reported by CoLExT. Because the browser runtime differs from native on-device training, only the ratios between phones are used. The absolute scale ($t_{\mathrm{high}} = 20$~ms per step) is an assumption; it affects the balance between computation and communication time, not the ranking of methods. The gateway profile follows a Raspberry Pi~4 Model B with 4~GB RAM~\cite{rpi4brief}.
 
 \begin{table}[t]
 \centering
@@ -227,8 +227,8 @@ Table~\ref{tab:params} lists every system parameter with its source. Device spee
 \midrule
 Device tiers & low, mid, high & Budget, mid-range and flagship phones of the original design \\
 Step time, high tier & $t_{\mathrm{high}} = 20$ ms & A (scale only) \\
-Low/high compute ratio & 2.3$\times$ & CoLExT~\cite{bozic2024} \\
-Mid tier & \todo{measured} ratio & Own phones; else A: 1.52$\times$ (geometric mean) \\
+Low/high compute ratio & 2.3$\times$ (literature); 5.06$\times$ (measured) & CoLExT~\cite{bozic2024}; own phones (Vivo Y31 vs.\ POCO F3) \\
+Mid/high compute ratio & 1.52$\times$ (literature); 2.90$\times$ (measured) & A: geometric mean; own phones (Redmi Note 12 vs.\ POCO F3) \\
 Per-round speed jitter & $\mathrm{LogN}(0, 0.2^2)$ & A: throttling and background load \\
 Phone WAN uplink (flat FL) & 20 / 12 / 6.25 Mbit/s (high/mid/low) & High/low ratio 3.2$\times$ from CoLExT~\cite{bozic2024}; absolute values A \\
 Gateway Wi-Fi LAN & 50 Mbit/s shared, $50/K$ per device & A: Pi~4 on-board 802.11ac \\
@@ -349,12 +349,16 @@ Raw data never leaves a device; only weights, sample counts and coarse profiles 
 \section{Experimental Setup}
 \label{sec:setup}
 
-\textit{Experiment groups.} Three groups of experiments answer the research questions:
+\textit{Experiment groups.} Four groups of experiments answer the research questions:
 \begin{itemize}
 \item \textbf{G1 (main; RQ1--RQ3):} $E = 4$, $K = 5$ ($N = 20$), mixed tiers, $\alpha \in \{0.1, 0.5, 1.0\}$, all methods, seeds $\{0, 1, 2\}$, plus flat and hierarchical FedAvg on an IID split.
 \item \textbf{G2 (system heterogeneity; RQ1):} $\alpha = 0.5$, tier mixes all-mid and low-heavy, methods H-FedAvg, H-FedProx+DL and Proposed, seeds $\{0, 1, 2\}$.
 \item \textbf{G3 (scaling; RQ4):} $\alpha = 0.5$, mixed tiers, $(E, K) \in \{(4,10), (4,25), (2,5), (10,5)\}$ together with $(4,5)$ from G1, methods Flat FedAvg, H-FedAvg and Proposed, seeds $\{0, 1\}$.
+\item \textbf{G4 (measured device profile; RQ1, RQ3):} as G1 but with the speed ratios measured on our phones, methods H-FedAvg, H-FedProx+DL and Proposed, seeds $\{0, 1, 2\}$.
+\item \textbf{G5 (deadline sensitivity; RQ3):} the proposed scheme with the deadline at the 75th and 90th percentiles of the expected full-epoch time, $\alpha \in \{0.1, 0.5\}$, seeds $\{0, 1, 2\}$.
+\item \textbf{G6 (second dataset):} the main configuration on CIFAR-10, $\alpha \in \{0.1, 0.5\}$, methods Centralised, Flat FedAvg, H-FedAvg, H-FedProx+DL and Proposed, seeds $\{0, 1, 2\}$.
 \end{itemize}
+G1--G5 use Fashion-MNIST, and all groups except G4 use the literature device profile.
 A seed fixes the data partition, the device-to-gateway assignment, the tier assignment, the jitter and the model initialisation.
 
 \textit{Metrics.} The primary metric is top-1 accuracy of the global model on the official test set, the metric reported by the base papers. To measure how well the shared model serves each skewed device, we compute a per-client accuracy under the client's own label distribution, $\mathrm{acc}_k = \sum_{c} p_{k,c}\, \mathrm{acc}_c$, where $\mathrm{acc}_c$ is the global model's accuracy on test class $c$ and $p_{k,c}$ is the fraction of client $k$'s samples in class $c$. This is exact (no sampling noise from small local test sets). We report the \emph{10th-percentile client accuracy} across clients as the worst-device metric; for the local-only baseline, each client's own model is used. Table~\ref{tab:rqmetrics} maps each research question to its experiments and metrics. Evaluation happens at every global round (every round for flat FedAvg). Results are reported as mean $\pm$ standard deviation over seeds, and differences between methods are checked with paired t-tests over seeds and $\alpha$ settings.
@@ -369,7 +373,7 @@ A seed fixes the data partition, the device-to-gateway assignment, the tier assi
 \toprule
 \textbf{RQ} & \textbf{Experiment} & \textbf{Metrics that answer it} \\
 \midrule
-RQ1 & $\alpha$ sweep and tier mixes (G1, G2) & Accuracy gap to centralised; rounds and simulated time to target accuracy \\
+RQ1 & $\alpha$ sweep, tier mixes and measured profile (G1, G2, G4) & Accuracy gap to centralised; rounds and simulated time to target accuracy \\
 RQ2 & Flat vs.\ hierarchical FedAvg, same computation (G1) & Bytes to and from the server; simulated round time; final accuracy \\
 RQ3 & Ablation H-FedAvg $\rightarrow$ Proposed (G1) & Final accuracy; 10th-percentile client accuracy; time to target; dropped updates; wasted steps \\
 RQ4 & $K$ and $E$ sweeps (G3) & Final accuracy; simulated round time; gateway aggregation time and memory; bytes \\
@@ -381,7 +385,7 @@ RQ4 & $K$ and $E$ sweeps (G3) & Final accuracy; simulated round time; gateway ag
 \section{Results}
 \label{sec:results}
 
-Table~\ref{tab:main} summarises the main configuration and Table~\ref{tab:scaling} the scaling sweep. \todo{state the target accuracy used for time-to-target (e.g., 90\% of the centralised final accuracy) and the total number of runs.}
+Table~\ref{tab:main} summarises the main configuration and Table~\ref{tab:scaling} the scaling sweep. Time to target is the simulated time until the global model first reaches 90\% of the centralised final accuracy for the same $\alpha$ (81.5--81.8\% on Fashion-MNIST). The study comprises 180 simulation runs (groups G1--G6).
 
 \begin{table*}[t]
 \centering
@@ -392,7 +396,9 @@ Table~\ref{tab:main} summarises the main configuration and Table~\ref{tab:scalin
 \end{table*}
 
 \subsection{RQ1: Cost of Statistical and System Heterogeneity}
-Fig.~\ref{fig:rq1} shows final accuracy across label-skew levels and tier mixes. \todo{Report the accuracy gap between centralised training and each federated method for $\alpha = 0.1, 0.5, 1.0$ and IID, and how the gap and the rounds/simulated time to target change when the tier mix goes from all-mid to mixed to low-heavy (G2). Confirm the IID sanity check (flat and hierarchical FedAvg close to centralised).}
+Under IID data, flat and hierarchical FedAvg reach 90.2\% and 90.3\%, within 0.6 points of centralised training (90.8\%), which confirms that the aggregation is implemented correctly. All methods are compared at their final round without early stopping; centralised training peaks slightly earlier (91.4\%), so the gaps below are about 0.6 points larger against its best epoch. Label skew then costs accuracy (Table~\ref{tab:main}, Fig.~\ref{fig:rq1}a): H-FedAvg ends 1.4, 2.0 and 5.2 points below centralised training for $\alpha = 1.0$, 0.5 and 0.1, so the proposal's target of staying within 5 points is met except at the most extreme skew, where flat FedAvg lands exactly on it (5.0 points). The cost falls unevenly: at $\alpha = 0.1$ the 10th-percentile client accuracy drops from 84.5\% (centralised) to 73.7\% and varies strongly between seeds ($\pm$9.8), because the worst-served clients are those whose few classes are rare elsewhere. Local-only training shows why both metrics are needed: each local model scores 92.9\% on its own skewed label distribution but only 33.4\% on the full test set.
+
+System heterogeneity behaves differently (Fig.~\ref{fig:rq1}b, G2). Because synchronous H-FedAvg waits for every device, its accuracy is the same across tier mixes (88.6\%), but its time per edge round grows from 4.7~s with all mid-tier devices to 5.6~s (mixed) and 6.6~s (low-heavy), and its time to target from 52~s to 69~s and 79~s: a 51\% slowdown caused purely by slower hardware. The proposed scheme absorbs most of this. Its time to target stays between 48 and 58~s and its accuracy between 87.6\% and 87.7\% across the three mixes, whereas the deadline alone loses accuracy when slow devices dominate (87.1\% for low-heavy, with 51\% of updates dropped). With the speed ratios measured on our own phones (1 : 2.90 : 5.06; G4), the slowdown roughly doubles: H-FedAvg needs 144~s instead of 69~s to reach the target at $\alpha = 0.5$, and 493~s instead of 244~s at $\alpha = 0.1$, with unchanged accuracy. The proposed scheme keeps its accuracy (87.6\% at $\alpha = 0.5$, as with the literature profile) and reaches the target 42--57\% sooner than H-FedAvg (83 instead of 144~s at $\alpha = 0.5$). The deadline alone suffers most from the wider spread: its 10th-percentile client accuracy at $\alpha = 0.1$ falls to 46.7\%.
 
 \begin{figure}[t]
 \centering
@@ -402,7 +408,7 @@ Fig.~\ref{fig:rq1} shows final accuracy across label-skew levels and tier mixes.
 \end{figure}
 
 \subsection{RQ2: Value of the Pi-Class Edge Tier}
-Fig.~\ref{fig:rq2} compares flat and hierarchical FedAvg at equal local computation. \todo{Compare flat FedAvg and H-FedAvg: accuracy versus bytes through the server and versus simulated time; report the measured server-traffic reduction (expected factor $K\kappa_2 = 10$) and whether final accuracy differs significantly. Report bytes per accuracy point (H2).}
+Fig.~\ref{fig:rq2} compares flat and hierarchical FedAvg at equal local computation. Adding the edge tier does not cost accuracy: the two end within 0.2 points of each other at every skew level (Table~\ref{tab:main}; paired t-test over nine seed--$\alpha$ pairs, $p = 0.86$). It does change where the traffic goes. Over 60 edge rounds the server exchanges 77.4~MB with the gateways instead of 773.8~MB with the devices, exactly the factor $K\kappa_2 = 10$; the rest of the traffic stays on the gateways' local networks. Measured up to the target accuracy, the hierarchy needs 39.5~MB of server traffic instead of 318~MB at $\alpha = 0.1$, 12.9 instead of 120~MB at $\alpha = 0.5$ and 10.3 instead of 103~MB at $\alpha = 1.0$ (8--10$\times$ less), which supports H2. Round latency improves only slightly (2--5\% less simulated time for 60 rounds), because local computation, not the WAN, dominates a round at this model size. The one cost appears under extreme skew: at $\alpha = 0.1$ the hierarchy needs 244~s instead of 201~s to reach the target, because the gateway models drift apart between the global synchronisations every $\kappa_2 = 2$ edge rounds.
 
 \begin{figure}[t]
 \centering
@@ -412,7 +418,13 @@ Fig.~\ref{fig:rq2} compares flat and hierarchical FedAvg at equal local computat
 \end{figure}
 
 \subsection{RQ3: Contribution of the Heterogeneity-Aware Mechanisms}
-Fig.~\ref{fig:rq3} and Table~\ref{tab:main} show the ablation. \todo{Walk through the ablation H-FedAvg $\rightarrow$ H-FedProx $\rightarrow$ H-FedProx+DL $\rightarrow$ Proposed: final accuracy, 10th-percentile client accuracy, time to target, fraction of dropped updates and wasted steps. Note which step contributes most and whether the deadline alone hurts fairness under strong skew. Report paired t-test p-values (H1).}
+Fig.~\ref{fig:rq3} and Table~\ref{tab:main} show the ablation, adding one mechanism at a time.
+
+\textit{FedProx.} With $\mu = 0.01$ and one local epoch per round, the proximal term has no measurable effect: H-FedProx matches H-FedAvg within 0.1 points at every skew level. Drift control matters more when devices run many local steps, which our deadline-bound rounds avoid.
+
+\textit{Deadline alone.} Cutting rounds at the median device's finish time makes them about twice as fast, but it discards 46--50\% of all updates and wastes 51--67\% of the local computation spent. The model sees the slow devices' data far less often, so final accuracy falls to 80.7\% at $\alpha = 0.1$ and the 10th-percentile client accuracy collapses to 62.2\% ($\pm$18.9): the deadline alone hurts exactly the devices it was meant to protect.
+
+\textit{Adaptive workload (the proposed scheme).} Giving slow devices fewer local steps, instead of dropping them, brings the dropped updates down to 6--7\% and the wasted computation to 6--7\%, and the whole run needs 26\% fewer local steps than H-FedAvg ($\alpha = 0.5$). The proposed scheme reaches the target accuracy fastest of all methods: in 142, 48 and 35~s against 244, 69 and 53~s for H-FedAvg at $\alpha = 0.1$, 0.5 and 1.0, i.e.\ 30--42\% sooner (paired t-test, $-47$~s, $p = 0.03$). After the same 60 rounds, however, it ends 1.35 points below H-FedAvg ($p = 0.005$), and its 10th-percentile client accuracy is 2.0 points lower ($p = 0.04$), because slow devices contribute shorter updates in every round. Compared at equal time rather than equal rounds the picture reverses: when the proposed scheme finishes its 60 rounds (202--218~s of simulated time), it is the most accurate method at every skew level, 1.6 points ahead of H-FedAvg on average ($p = 0.017$; at $\alpha = 0.1$, 83.2\% against 80.3\%). Hypothesis H1 is therefore supported for time to accuracy and for accuracy under a time budget, but not for final accuracy at an equal number of rounds.
 
 \begin{figure}[t]
 \centering
@@ -421,8 +433,18 @@ Fig.~\ref{fig:rq3} and Table~\ref{tab:main} show the ablation. \todo{Walk throug
 \label{fig:rq3}
 \end{figure}
 
+\textit{Deadline sensitivity.} The deadline is the parameter that trades speed against accuracy. Table~\ref{tab:deadline} repeats the proposed scheme with looser deadlines, set to the 75th and 90th percentiles of the devices' expected full-epoch time instead of the median (G5). Loosening the deadline trades time for accuracy smoothly. Moving $q$ from 0.5 to 0.9 raises final accuracy from 83.2\% to 84.2\% at $\alpha = 0.1$ and from 87.6\% to 88.2\% at $\alpha = 0.5$, with the 10th-percentile client accuracy rising alongside, while the time to target grows from 142 to 187~s and from 48 to 62~s. Even at $q = 0.9$ final accuracy stays 1.5 and 0.4 points below H-FedAvg, but the target is still reached 23\% and 10\% sooner. A deadline at the 75th percentile is a balanced default: it gives up 1.7 and 0.6 points of final accuracy for a 26\% and 23\% shorter time to target.
+
+\begin{table}[t]
+\centering
+\caption{Deadline sensitivity of the proposed scheme ($E = 4$, $K = 5$, mixed tiers; mean over three seeds). $q$: deadline quantile of the devices' expected full-epoch time; $T_{\mathrm{tgt}}$ in simulated seconds.}
+\label{tab:deadline}
+\footnotesize
+\input{tables/tab_deadline}
+\end{table}
+
 \subsection{RQ4: Scaling with Devices per Gateway and Gateways}
-Fig.~\ref{fig:rq4} and Table~\ref{tab:scaling} report the scaling sweep. \todo{Report how final accuracy, simulated round time, gateway aggregation time and memory, and server/edge bytes change for $K = 5, 10, 25$ ($E = 4$) and $E = 2, 4, 10$ ($K = 5$). Identify which resource (LAN share, aggregation time, waiting for stragglers) grows fastest and whether a Pi-class gateway becomes the bottleneck within the tested range.}
+Fig.~\ref{fig:rq4} and Table~\ref{tab:scaling} report the scaling sweep. With the dataset fixed, adding devices spreads it thinner (3{,}000 samples per device at $N = 20$, 600 at $N = 100$), so final accuracy falls from 89.0\% to 84.6\% for H-FedAvg as $K$ grows from 5 to 25; the hierarchy stays within 0.5 points of flat FedAvg at every size. The time per edge round first falls with $K$, because each device has less data to train on, but for the proposed scheme it rises again from 2.7~s at $K = 10$ to 3.4~s at $K = 25$. The cause is the gateway's shared Wi-Fi: at $K = 25$ each device's share drops to 2~Mbit/s, so downloading and uploading the 322~KB model takes 2.6~s, longer than the device's local training (0.4--0.9~s for its 19 steps). Flat FL, whose devices each use their own mobile uplink, does not share this bottleneck: the hierarchy's rounds are 5\% shorter than flat FL's at $K = 5$, 8\% longer at $K = 10$ and 74\% longer at $K = 25$ (4.7~s against 2.7~s for H-FedAvg). Our model treats the server's own link as unconstrained, which favours flat FL; with 100 devices uploading at once, a real server link would saturate as well. Aggregation on the gateway grows linearly with $K$ (27, 54 and 139~ms) but stays below 5\% of the round, and streaming aggregation keeps its memory at 0.64~MB instead of 8.1~MB. Adding gateways instead ($E = 2 \rightarrow 10$ at $K = 5$) leaves each gateway's load unchanged; accuracy falls from 90.4\% to 87.2\% and the round time from 11.7~s to 3.6~s, again because each device holds less data. Within the tested range, a Pi-class gateway therefore runs out of shared wireless bandwidth well before its CPU or memory become binding. This suggests serving roughly ten devices per gateway, or giving the gateway a faster link to its devices, rather than buying a stronger board.
 
 \begin{table}[t]
 \centering
@@ -439,8 +461,21 @@ Fig.~\ref{fig:rq4} and Table~\ref{tab:scaling} report the scaling sweep. \todo{R
 \label{fig:rq4}
 \end{figure}
 
+\subsection{Second Dataset: CIFAR-10}
+CIFAR-10 is the other dataset shared by the hierarchical base papers (FedAda, FedUC, ESPerHFL and MTGC). Table~\ref{tab:cifar} repeats the main configuration on it (G6), using the same network with three input channels (87{,}458 parameters). Centralised training overfits this small network: its test accuracy peaks at 68.6\% after 6--10 epochs and falls to 62.6\% by epoch 60, while the federated runs are still improving at round 60. Measured against the best centralised epoch, H-FedAvg ends 5.1 points lower at $\alpha = 0.5$ (63.4\%) and 10.9 points lower at $\alpha = 0.1$ (57.7\%); the time-to-target threshold, 90\% of the final centralised accuracy, is correspondingly lenient here.
+
+The RQ2 conclusion carries over unchanged: hierarchical and flat FedAvg differ by at most 0.5 points, with the same tenfold reduction in server traffic. RQ3 carries over with a sharper trade-off. At $\alpha = 0.5$ the proposed scheme reaches the target 30\% sooner than H-FedAvg (105 instead of 150~s) and ends 1.4 points lower. At $\alpha = 0.1$ it does not reach the target within 60 rounds (52.8\% final, against 57.7\% for H-FedAvg), most likely because on a harder task the classes held mainly by slow devices get too few local steps. The deadline alone collapses to 41.4\%. At equal time the proposed scheme again leads: when it finishes its 60 rounds (177 and 190~s), it is 4.1 and 2.1 points ahead of H-FedAvg at $\alpha = 0.1$ and 0.5, and H-FedAvg needs 2.6 and 1.9 times as long to complete its rounds.
+
+\begin{table}[t]
+\centering
+\caption{Main configuration on CIFAR-10 ($E = 4$, $K = 5$, mixed tiers; mean over three seeds). The target is 90\% of the final CIFAR-10 centralised accuracy; centralised training peaks earlier, at 68.6\%. n.r.: target not reached within 60 rounds by all seeds.}
+\label{tab:cifar}
+\footnotesize
+\input{tables/tab_cifar}
+\end{table}
+
 \subsection{Model Size and Deployment}
-The final global model has 80{,}602 parameters and occupies 315~KiB in float32. \todo{int8-quantised size and test-accuracy change after quantisation; inference latency per sample measured on our phones with the benchmark page.}
+The final global model has 80{,}602 parameters and occupies 315~KiB in float32. Single-sample inference in the browser benchmark took 3.8~ms on the POCO F3, 9.3~ms on the Redmi Note 12 and 25.5~ms on the Vivo Y31, so on-device inference with the redeployed model is cheap even on the budget phone; training is the constraint (1.6--8.1~s per step of 32 samples in the browser). Post-training int8 quantisation of the weights (per-tensor symmetric, biases kept in float32, as in dynamic-range quantisation) shrinks the final global model of the main configuration ($\alpha = 0.5$, seed 0) from 322~KB to 81~KB, a factor of 4.0, while its test accuracy changes by only $-0.05$ points (88.14\% to 88.09\%). The int8 model is therefore the natural format for redeploying the global model to the devices.
 
 % ---------------------------------------------------------------------
 \section{Discussion and Limitations}
@@ -448,21 +483,23 @@ The final global model has 80{,}602 parameters and occupies 315~KiB in float32. 
 
 \textit{Emulation, not measurement.} The gateways are emulated, and several gateway and network parameters are assumptions (Table~\ref{tab:params}). Absolute times are therefore indicative; the claims of this paper concern relative comparisons between methods under a common, documented cost model.
 
-\textit{Device speeds.} Speed ratios come from published phone measurements and from a browser benchmark on our phones. The browser runtime is not the native on-device training runtime, which is why only ratios are used.
+\textit{Device speeds.} Speed ratios come from published phone measurements and from a browser benchmark on our phones. The browser runtime is not the native on-device training runtime, which is why only ratios are used. The TensorFlow.js CPU backend also runs on a single thread, so it mostly reflects single-core speed: a 2024 flagship (Galaxy S24 Ultra, 1{,}430~ms per step) measured only 12\% faster than the 2021 POCO F3. A native multi-threaded runtime would likely widen the gap between flagship and budget phones, so the measured ratios are, if anything, conservative.
 
 \textit{Model and dataset.} The model is small and Fashion-MNIST is an easy benchmark, so gateway memory and aggregation time are not binding at this scale; the ResNet-18 calculation in Section~\ref{sec:method} shows where they would become binding.
 
+\textit{Network model.} Links are modelled by fixed rates: devices share their gateway's Wi-Fi equally, each device in flat FL has its own uplink, and the server's link is unconstrained. Contention, packet loss and the server's ingress limit are not modelled; the last favours flat FL at large $N$.
+
 \textit{Simplifications.} Device-to-gateway assignment is static, there is no device mobility or failure other than missed deadlines, links are not contended across gateways, and energy is not modelled.
 
-\todo{One paragraph interpreting the results: what a practitioner deploying Pi-class gateways should take away (e.g., deadline setting, devices per gateway).}
+\textit{What this means for deployment.} Three practical points follow. First, a Pi-class gateway is an adequate aggregator for small models: its CPU and memory are far from binding, and streaming aggregation keeps its memory constant, so the binding resource is the shared wireless link; about ten devices per gateway keep communication below computation in our setting. Second, slow devices should be given less work rather than dropped: a deadline alone discards about half of all updates and hurts the devices whose data is rarest, whereas adaptive workload keeps about 94\% of them. Third, the deadline should follow what the deployment needs. A deadline at the median device minimises the time to a usable model; one at the 75th--90th percentile recovers most of the final accuracy; and under extreme skew on a harder task (CIFAR-10, $\alpha = 0.1$) a loose deadline is advisable. These recommendations rest on emulated gateways and browser-measured phone speeds and should be confirmed on physical hardware.
 
 % ---------------------------------------------------------------------
 \section{Conclusion and Future Work}
 \label{sec:conclusion}
 
-We studied three-tier hierarchical federated learning with heterogeneous devices and resource-constrained, Raspberry Pi-class edge gateways. Using a documented cost model with parameters taken from published measurements and our own phones, we evaluated the cost of heterogeneity, the value of the edge tier, the contribution of FedProx, deadline-based partial aggregation and adaptive local workload, and scaling with the number of devices per gateway. \todo{two or three sentences with the main quantitative findings.}
+We studied three-tier hierarchical federated learning with heterogeneous devices and resource-constrained, Raspberry Pi-class edge gateways. Using a documented cost model with parameters taken from published measurements and our own phones, we evaluated the cost of heterogeneity, the value of the edge tier, the contribution of FedProx, deadline-based partial aggregation and adaptive local workload, and scaling with the number of devices per gateway. The edge tier preserved accuracy while cutting server traffic tenfold. Giving slow devices fewer local steps instead of dropping them reached the target accuracy 30--42\% sooner (42--57\% with our phones' measured speeds) and gave the highest accuracy at equal elapsed time, at a cost of 1.35 points after an equal number of rounds. A Pi-class gateway was limited by its shared Wi-Fi rather than its CPU or memory. The same conclusions held on CIFAR-10, where the speed--accuracy trade-off was sharper under extreme skew.
 
-Future work follows directly from the limitations: (i) replacing the emulated gateways with physical Raspberry Pi boards and measuring aggregation time, memory and energy; (ii) gateway-aware aggregation, such as assigning devices to gateways by capacity or adapting the global synchronisation period $\kappa_2$ to gateway load; (iii) edge-level differential privacy at the gateway; and (iv) harder benchmarks such as CIFAR-10~\cite{krizhevsky2009} and the naturally partitioned FEMNIST~\cite{caldas2018leaf}.
+Future work follows directly from the limitations: (i) replacing the emulated gateways with physical Raspberry Pi boards and measuring aggregation time, memory and energy; (ii) gateway-aware aggregation, such as assigning devices to gateways by capacity or adapting the global synchronisation period $\kappa_2$ to gateway load; (iii) edge-level differential privacy at the gateway; and (iv) larger models, where gateway memory becomes binding, and naturally partitioned benchmarks such as FEMNIST~\cite{caldas2018leaf}.
 
 % ---------------------------------------------------------------------
 \begin{thebibliography}{99}
@@ -542,6 +579,9 @@ K.~Bonawitz \textit{et al.}, ``Practical secure aggregation for privacy-preservi
 \bibitem{xiao2017fmnist}
 H.~Xiao, K.~Rasul, and R.~Vollgraf, ``Fashion-MNIST: A novel image dataset for benchmarking machine learning algorithms,'' 2017, \textit{arXiv:1708.07747}.
 
+\bibitem{krizhevsky2009}
+A.~Krizhevsky, ``Learning multiple layers of features from tiny images,'' Univ. of Toronto, Tech. Rep., 2009.
+
 \bibitem{hsu2019}
 T.-M.~H. Hsu, H.~Qi, and M.~Brown, ``Measuring the effects of non-identical data distribution for federated visual classification,'' 2019, \textit{arXiv:1909.06335}.
 
@@ -556,9 +596,6 @@ K.~He, X.~Zhang, S.~Ren, and J.~Sun, ``Deep residual learning for image recognit
 
 \bibitem{paszke2019pytorch}
 A.~Paszke \textit{et al.}, ``PyTorch: An imperative style, high-performance deep learning library,'' in \textit{Advances in Neural Information Processing Systems (NeurIPS)}, vol.~32, 2019, pp. 8024--8035.
-
-\bibitem{krizhevsky2009}
-A.~Krizhevsky, ``Learning multiple layers of features from tiny images,'' Univ. of Toronto, Tech. Rep., 2009.
 
 \bibitem{caldas2018leaf}
 S.~Caldas \textit{et al.}, ``LEAF: A benchmark for federated settings,'' 2018, \textit{arXiv:1812.01097}.

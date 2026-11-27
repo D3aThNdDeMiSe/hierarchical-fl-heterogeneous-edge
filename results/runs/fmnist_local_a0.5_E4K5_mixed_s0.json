@@ -1,0 +1,104 @@
+{
+ "name": "fmnist_local_a0.5_E4K5_mixed_s0",
+ "config": {
+  "method": "local",
+  "dataset": "fmnist",
+  "alpha": 0.5,
+  "gateways": 4,
+  "clients_per_gateway": 5,
+  "tiers": "mixed",
+  "seed": 0,
+  "rounds": 60,
+  "kappa2": 2,
+  "batch_size": 32,
+  "lr": 0.05,
+  "mu": 0.01,
+  "tau_min_frac": 0.1,
+  "safety_quantile": 0.9,
+  "deadline_quantile": 0.5,
+  "data_root": "data"
+ },
+ "method_spec": {
+  "topo": "local"
+ },
+ "history": [
+  {
+   "round": 60,
+   "sim_time": 0.0,
+   "bytes_server": 0,
+   "bytes_edge": 0,
+   "updates": 0,
+   "dropped": 0,
+   "steps": 113160,
+   "wasted_steps": 0,
+   "acc": 0.6380699768662452,
+   "loss": NaN,
+   "client_acc_mean": 0.9042382895946502,
+   "client_acc_p10": 0.8630060970783233,
+   "client_acc_min": 0.8186593055725098,
+   "client_acc_std": 0.03521515631020433
+  }
+ ],
+ "final": {
+  "round": 60,
+  "sim_time": 0.0,
+  "bytes_server": 0,
+  "bytes_edge": 0,
+  "updates": 0,
+  "dropped": 0,
+  "steps": 113160,
+  "wasted_steps": 0,
+  "acc": 0.6380699768662452,
+  "loss": NaN,
+  "client_acc_mean": 0.9042382895946502,
+  "client_acc_p10": 0.8630060970783233,
+  "client_acc_min": 0.8186593055725098,
+  "client_acc_std": 0.03521515631020433
+ },
+ "best_acc": 0.6380699768662452,
+ "setup": {
+  "n_clients": 20,
+  "model_params": 80602,
+  "model_bytes": 322408,
+  "tier_counts": {
+   "low": 7,
+   "mid": 7,
+   "high": 6
+  },
+  "samples_per_client": {
+   "min": 1137,
+   "median": 3146.5,
+   "max": 4944
+  },
+  "step_source": "CoLExT ratio; mid tier = geometric mean (assumption)",
+  "step_s": {
+   "high": 0.02,
+   "mid": 0.0303315017762062,
+   "low": 0.046
+  },
+  "device": "NVIDIA GeForce RTX 5060 Laptop GPU",
+  "local_global_acc_per_client": [
+   0.5486999750137329,
+   0.48649999499320984,
+   0.7547999620437622,
+   0.6571999788284302,
+   0.7407999634742737,
+   0.6319999694824219,
+   0.6525999903678894,
+   0.7479999661445618,
+   0.6694999933242798,
+   0.776699960231781,
+   0.3310000002384186,
+   0.7143999934196472,
+   0.7328999638557434,
+   0.4658999741077423,
+   0.5361999869346619,
+   0.4010999798774719,
+   0.6056999564170837,
+   0.7702999711036682,
+   0.8136999607086182,
+   0.7233999967575073
+  ]
+ },
+ "wall_time_s": 380.2786240577698
+}

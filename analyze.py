@@ -50,8 +50,17 @@ plt.rcParams.update({
     "ytick.color": "#52514e", "axes.grid": True, "grid.color": "#e4e3df", "grid.linewidth": 0.5,
     "axes.spines.top": False, "axes.spines.right": False, "lines.linewidth": 1.4,
     "lines.markersize": 3.5, "legend.frameon": False, "pdf.fonttype": 42, "savefig.bbox": "tight",
-    "savefig.pad_inches": 0.02,
+    "savefig.pad_inches": 0.02, "axes.axisbelow": True,
 })
+PREVIEW = os.path.join(OUT, "preview")
+
+
+def save(fig, name):
+    """PDF for the paper, PNG preview for slides and visual checks."""
+    os.makedirs(PREVIEW, exist_ok=True)
+    fig.savefig(os.path.join(FIG, name + ".pdf"))
+    fig.savefig(os.path.join(PREVIEW, name + ".png"), dpi=220)
+    plt.close(fig)
 COL_W = 3.45  # inches, IEEE single column
 
 
@@ -64,11 +73,12 @@ def load():
         c, fin, s = r["config"], r["final"], r["setup"]
         rows.append(dict(
             name=r["name"], method=c["method"], alpha="iid" if c["alpha"] is None else f"{c['alpha']:g}",
+            profile=c.get("profile", "colext"), dq=c.get("deadline_quantile", 0.5), dataset=c["dataset"],
             E=c["gateways"], K=c["clients_per_gateway"], N=c["gateways"] * c["clients_per_gateway"],
             tiers=c["tiers"], seed=c["seed"], rounds=c["rounds"], acc=fin["acc"], p10=fin["client_acc_p10"],
             cmean=fin["client_acc_mean"], sim_time=fin["sim_time"], bytes_server=fin["bytes_server"],
             bytes_edge=fin["bytes_edge"], dropped=fin["dropped"], updates=fin["updates"], steps=fin["steps"],
-            wasted=fin["wasted_steps"], edge_rt=s.get("edge_round_time_mean_s"), agg=s.get("gw_agg_time_mean_s"),
+            wasted=fin["wasted_steps"], edge_rt=s.get("edge_round_time_mean_s"), agg_s=s.get("gw_agg_time_mean_s"),
             deadline=s.get("deadline_s"), wall=r["wall_time_s"]))
         hist[r["name"]] = r["history"]
     return pd.DataFrame(rows), hist
@@ -86,6 +96,23 @@ def time_to_target(h, target):
         if e["acc"] >= target:
             return e["sim_time"], e["round"]
     return np.nan, np.nan
+
+
+def acc_at_time(h, budget):
+    """Accuracy of the last evaluation completed within `budget` simulated seconds."""
+    acc = np.nan
+    for e in h:
+        if e["sim_time"] > budget:
+            break
+        acc = e["acc"]
+    return acc
+
+
+def bytes_to_target(h, target):
+    for e in h:
+        if e["acc"] >= target:
+            return e["bytes_server"]
+    return np.nan
 
 
 def mean_curve(hist, names, x="sim_time"):
@@ -116,6 +143,11 @@ def main():
     if df.empty:
         print("no results yet")
         return
+    cifar = sel(df, dataset="cifar10")  # G6, reported in its own table
+    df = sel(df, dataset="fmnist")
+    measured = sel(df, profile="measured")
+    deadlines = sel(df, profile="colext", dq=[0.75, 0.9])  # G5 deadline sensitivity
+    df = sel(df, profile="colext", dq=0.5)  # main analysis; G4 and G5 are reported separately
     main_cfg = sel(df, E=4, K=5, tiers="mixed")
 
     # targets per alpha from centralised runs
@@ -128,34 +160,52 @@ def main():
         fallback = float(np.mean(list(targets.values())))
         for a in ALPHAS + ["iid"]:
             targets.setdefault(a, fallback)
-    df["t_target"], df["r_target"] = np.nan, np.nan
-    for i, row in df.iterrows():
-        tgt = targets.get(row.alpha)
-        if tgt is not None and row.method not in ("centralised", "local"):
-            df.loc[i, ["t_target", "r_target"]] = time_to_target(hist[row["name"]], tgt)
+    def add_targets(frame):
+        frame = frame.copy()
+        frame["t_target"], frame["r_target"] = np.nan, np.nan
+        for i, row in frame.iterrows():
+            tgt = targets.get(row.alpha)
+            if tgt is not None and row.method not in ("centralised", "local"):
+                frame.loc[i, ["t_target", "r_target"]] = time_to_target(hist[row["name"]], tgt)
+        return frame
+
+    df, measured, deadlines = add_targets(df), add_targets(measured), add_targets(deadlines)
     main_cfg = sel(df, E=4, K=5, tiers="mixed")
 
-    stats_out = {"targets": targets, "n_runs": int(len(df)), "target_frac": TARGET_FRAC}
-    write_summary(df)
+    stats_out = {"targets": targets, "n_runs": int(len(df) + len(measured) + len(deadlines)),
+                 "target_frac": TARGET_FRAC}
+    write_summary(pd.concat([df, measured, deadlines]))
     table_main(main_cfg)
     table_scaling(df)
-    fig_rq1(df, main_cfg)
+    stats_out["deadline_sensitivity"] = table_deadline(main_cfg, deadlines)
+    stats_out["cifar10"] = table_cifar(cifar, hist)
+    stats_out["phones_step_s"] = fig_phones()
+    fig_rq1(df, main_cfg, measured)
     fig_rq2(main_cfg, hist)
     fig_rq3(main_cfg, hist)
     fig_rq4(df)
     stats_out.update(key_numbers(df, main_cfg))
+    stats_out["equal_time"] = equal_time(main_cfg, hist)
+    stats_out["server_MB_to_target"] = {
+        f"{meth}_{a}": float(np.nanmean([bytes_to_target(hist[n], targets[a]) / 1e6
+                                         for n in sel(main_cfg, method=meth, alpha=a).name]))
+        for meth in ("flat_fedavg", "hier_fedavg", "hier_proposed") for a in ALPHAS
+        if len(sel(main_cfg, method=meth, alpha=a))}
+    stats_out["measured_profile"] = measured_numbers(measured, main_cfg)
     with open(os.path.join(OUT, "stats.json"), "w") as f:
         json.dump(stats_out, f, indent=1, default=float)
-    print(f"{len(df)} runs analysed; figures in paper/figures, tables in paper/tables")
+    print(f"{stats_out['n_runs'] + len(cifar)} runs analysed ({len(df)} main, {len(measured)} measured profile, "
+          f"{len(deadlines)} deadline sensitivity, {len(cifar)} CIFAR-10); "
+          f"figures in paper/figures, tables in paper/tables")
 
 
 def write_summary(df):
-    g = df.groupby(["method", "alpha", "E", "K", "tiers"])
+    g = df.groupby(["profile", "method", "alpha", "E", "K", "tiers"])
     agg = g.agg(n=("seed", "count"), acc=("acc", "mean"), acc_sd=("acc", "std"), p10=("p10", "mean"),
                 p10_sd=("p10", "std"), t_target=("t_target", "mean"), sim_time=("sim_time", "mean"),
                 server_MB=("bytes_server", lambda v: v.mean() / 1e6), dropped=("dropped", "mean"),
                 updates=("updates", "mean"), wasted=("wasted", "mean"), steps=("steps", "mean"),
-                edge_rt=("edge_rt", "mean"), agg_ms=("agg", lambda v: v.mean() * 1e3), wall=("wall", "mean"))
+                edge_rt=("edge_rt", "mean"), agg_ms=("agg_s", lambda v: v.mean() * 1e3), wall=("wall", "mean"))
     with open(os.path.join(OUT, "summary.txt"), "w") as f:
         with pd.option_context("display.width", 250, "display.max_rows", 500, "display.float_format", "{:.4f}".format):
             f.write(agg.reset_index().to_string(index=False))
@@ -219,12 +269,84 @@ def table_scaling(df):
         for meth in ("hier_fedavg", "hier_proposed"):
             v = sel(r, method=meth)
             cells.append(f"{(v.sim_time / v.rounds).mean():.2f}" if len(v) else "--")
-        v = sel(r, method="hier_proposed").agg
+        v = sel(r, method="hier_proposed")["agg_s"]
         cells.append(f"{1e3 * v.mean():.0f}" if len(v) and v.notna().any() else "--")
         lines.append(" & ".join(cells) + r" \\")
     lines += [r"\bottomrule", r"\end{tabular}"]
     with open(os.path.join(TAB, "tab_scaling.tex"), "w") as f:
         f.write("% generated by analyze.py -- do not edit\n" + "\n".join(lines) + "\n")
+
+
+def table_deadline(m, dl):
+    """G5: proposed scheme at deadline quantiles 0.5 (from G1), 0.75 and 0.9, next to H-FedAvg."""
+    rows = [("H-FedAvg (no deadline)", sel(m, method="hier_fedavg"))]
+    rows.append(("Proposed, $q = 0.5$", sel(m, method="hier_proposed")))
+    for q in (0.75, 0.9):
+        rows.append((f"Proposed, $q = {q:g}$", sel(dl, method="hier_proposed", dq=q)))
+    lines = [r"\setlength{\tabcolsep}{3pt}", r"\begin{tabular}{l ccc ccc}", r"\toprule",
+             r" & \multicolumn{3}{c}{$\alpha = 0.1$} & \multicolumn{3}{c}{$\alpha = 0.5$} \\",
+             r"\cmidrule(lr){2-4}\cmidrule(lr){5-7}",
+             r"Setting & Acc & P10 & $T_{\mathrm{tgt}}$ & Acc & P10 & $T_{\mathrm{tgt}}$ \\", r"\midrule"]
+    out = {}
+    for label, frame in rows:
+        cells = [label]
+        for a in ("0.1", "0.5"):
+            r = sel(frame, alpha=a)
+            cells += [f"{100 * r.acc.mean():.1f}" if len(r) else "--",
+                      f"{100 * r.p10.mean():.1f}" if len(r) else "--",
+                      (f"{r.t_target.mean():.0f}" if r.t_target.notna().all() else "n.r.") if len(r) else "--"]
+            if len(r):
+                out[f"{label}_{a}"] = dict(acc=r.acc.mean(), p10=r.p10.mean(), t_target=r.t_target.mean(),
+                                           sim_time=r.sim_time.mean(),
+                                           dropped_frac=float((r.dropped / r.updates).mean()),
+                                           n=int(len(r)))
+        lines.append(" & ".join(cells) + r" \\")
+    lines += [r"\bottomrule", r"\end{tabular}"]
+    with open(os.path.join(TAB, "tab_deadline.tex"), "w") as f:
+        f.write("% generated by analyze.py -- do not edit\n" + "\n".join(lines) + "\n")
+    return out
+
+
+def table_cifar(c, hist):
+    """G6: main configuration on CIFAR-10 (target = 90% of CIFAR-10 centralised accuracy)."""
+    c = c.copy()
+    c["t_target"] = np.nan
+    targets = {a: TARGET_FRAC * sel(c, method="centralised", alpha=a).acc.mean() for a in ("0.1", "0.5")}
+    for i, row in c.iterrows():
+        tgt = targets.get(row.alpha)
+        if row.method != "centralised" and tgt is not None and not np.isnan(tgt):
+            c.loc[i, "t_target"] = time_to_target(hist[row["name"]], tgt)[0]
+    meths = ["centralised", "flat_fedavg", "hier_fedavg", "hier_fedprox_dl", "hier_proposed"]
+    lines = [r"\setlength{\tabcolsep}{3pt}", r"\begin{tabular}{l ccc ccc}", r"\toprule",
+             r" & \multicolumn{3}{c}{$\alpha = 0.1$} & \multicolumn{3}{c}{$\alpha = 0.5$} \\",
+             r"\cmidrule(lr){2-4}\cmidrule(lr){5-7}",
+             r"Method & Acc & P10 & $T_{\mathrm{tgt}}$ & Acc & P10 & $T_{\mathrm{tgt}}$ \\", r"\midrule"]
+    out = {"targets": targets}
+    for meth in meths:
+        cells = [LABEL[meth]]
+        for a in ("0.1", "0.5"):
+            r = sel(c, method=meth, alpha=a)
+            if r.empty:
+                cells += ["--", "--", "--"]
+                continue
+            tt = "--" if meth == "centralised" else (f"{r.t_target.mean():.0f}" if r.t_target.notna().all()
+                                                     else f"n.r.\\,({r.t_target.notna().sum()}/{len(r)})")
+            cells += [f"{100 * r.acc.mean():.1f}", f"{100 * r.p10.mean():.1f}", tt]
+            out[f"{meth}_{a}"] = dict(acc=r.acc.mean(), acc_sd=r.acc.std(), p10=r.p10.mean(),
+                                      t_target=r.t_target.mean(), n=int(len(r)))
+        lines.append(" & ".join(cells) + r" \\")
+        if meth == "centralised":
+            lines.append(r"\midrule")
+    for a in ("0.1", "0.5"):  # accuracy of every method when the proposed scheme finishes its rounds
+        budget = sel(c, method="hier_proposed", alpha=a).sim_time.mean()
+        if not np.isnan(budget):
+            out[f"equal_time_{a}"] = {"budget": float(budget), **{
+                meth: float(np.nanmean([acc_at_time(hist[n], budget) for n in sel(c, method=meth, alpha=a).name]))
+                for meth in meths[1:] if len(sel(c, method=meth, alpha=a))}}
+    lines += [r"\bottomrule", r"\end{tabular}"]
+    with open(os.path.join(TAB, "tab_cifar.tex"), "w") as f:
+        f.write("% generated by analyze.py -- do not edit\n" + "\n".join(lines) + "\n")
+    return out
 
 
 def _legend_below(fig, axes, ncol):
@@ -238,7 +360,7 @@ def _legend_below(fig, axes, ncol):
                handlelength=1.6, columnspacing=1.0)
 
 
-def fig_rq1(df, m):
+def fig_rq1(df, m, measured):
     fig, (a1, a2) = plt.subplots(1, 2, figsize=(COL_W, 1.95))
     cats = ALPHAS + ["iid"]
     x = np.arange(len(cats))
@@ -257,26 +379,26 @@ def fig_rq1(df, m):
     a1.set_ylabel("final test accuracy")
     a1.set_title("(a) statistical heterogeneity", loc="left")
 
-    tiers = ["mid", "mixed", "low_heavy"]
+    # system heterogeneity: three tier mixes with literature ratios, plus the mixed split
+    # with the speed ratios measured on our own phones (G4)
+    cats = [("mid", df), ("mixed", df), ("low_heavy", df), ("mixed", measured)]
     meths = ["hier_fedavg", "hier_fedprox_dl", "hier_proposed"]
-    d = sel(df, alpha="0.5", E=4, K=5)
     w = 0.26
     for i, meth in enumerate(meths):
-        vals = [sel(d, method=meth, tiers=t).t_target.mean() for t in tiers]
-        pos = np.arange(len(tiers)) + (i - 1) * w
+        vals = [sel(src, method=meth, tiers=t, alpha="0.5", E=4, K=5).t_target.mean() for t, src in cats]
+        pos = np.arange(len(cats)) + (i - 1) * w
         a2.bar(pos, np.nan_to_num(vals), width=w - 0.04, color=COLOR[meth], label=LABEL[meth])
         for p, v in zip(pos, vals):
             if np.isnan(v):
                 a2.text(p, 0, "n.r.", ha="center", va="bottom", fontsize=5.5, color="#52514e")
-    a2.set_xticks(np.arange(len(tiers)), ["all mid", "mixed", "low-heavy"])
+    a2.set_xticks(np.arange(len(cats)), ["all\nmid", "mixed", "low-\nheavy", "mixed\n(phones)"])
     a2.set_xlabel(r"device-tier mix ($\alpha = 0.5$)")
     a2.set_ylabel("simulated time to target (s)")
     a2.set_title("(b) system heterogeneity", loc="left")
     a2.grid(axis="x", visible=False)
     fig.tight_layout(w_pad=1.2, rect=(0, 0.13, 1, 1))
     _legend_below(fig, (a1, a2), ncol=3)
-    fig.savefig(os.path.join(FIG, "fig_rq1_heterogeneity.pdf"))
-    plt.close(fig)
+    save(fig, "fig_rq1_heterogeneity")
 
 
 def fig_rq2(m, hist):
@@ -299,8 +421,7 @@ def fig_rq2(m, hist):
         a.set_ylim(bottom=0.6)
     fig.tight_layout(w_pad=1.0, rect=(0, 0.1, 1, 1))
     _legend_below(fig, (a1, a2), ncol=2)
-    fig.savefig(os.path.join(FIG, "fig_rq2_comm.pdf"))
-    plt.close(fig)
+    save(fig, "fig_rq2_comm")
 
 
 def fig_rq3(m, hist):
@@ -331,8 +452,7 @@ def fig_rq3(m, hist):
     a2.set_ylim(bottom=max(0.0, np.floor((lo - 0.05) * 10) / 10))
     fig.tight_layout(w_pad=1.2, rect=(0, 0.13, 1, 1))
     _legend_below(fig, (a1, a2), ncol=4)
-    fig.savefig(os.path.join(FIG, "fig_rq3_ablation.pdf"))
-    plt.close(fig)
+    save(fig, "fig_rq3_ablation")
 
 
 def fig_rq4(df):
@@ -362,8 +482,36 @@ def fig_rq4(df):
     axes[1, 0].set_ylabel("sim. time / round (s)")
     fig.tight_layout(h_pad=0.6, w_pad=1.0, rect=(0, 0.07, 1, 1))
     _legend_below(fig, axes, ncol=3)
-    fig.savefig(os.path.join(FIG, "fig_rq4_scaling.pdf"))
-    plt.close(fig)
+    save(fig, "fig_rq4_scaling")
+
+
+def fig_phones():
+    """Measured time per training step on real phones (phone_benchmark), slowest at the bottom."""
+    phones = []
+    for fn, key in (("measurements.json", "phones"), ("measurements_extra.json", "phones")):
+        p = os.path.join(ROOT, "phone_benchmark", fn)
+        if os.path.exists(p):
+            with open(p) as f:
+                phones += json.load(f)[key]
+    if not phones:
+        return None
+    phones.sort(key=lambda d: d["train_step_ms_median"])
+    names = [d["phone"].replace("Samsung Galaxy ", "Galaxy ") for d in phones]
+    ms = np.array([d["train_step_ms_median"] for d in phones]) / 1000
+    fastest = ms.min()
+    fig, ax = plt.subplots(figsize=(COL_W, 0.32 * len(phones) + 0.55))
+    y = np.arange(len(phones))[::-1]
+    ax.barh(y, ms, height=0.6, color="#2a78d6")
+    for yi, v in zip(y, ms):
+        ax.text(v + ms.max() * 0.01, yi, f"{v:.1f} s ({v / fastest:.1f}$\\times$)", va="center", fontsize=6.5,
+                color="#0b0b0b")
+    ax.set_yticks(y, names)
+    ax.set_xlim(0, ms.max() * 1.3)
+    ax.set_xlabel("time per training step, batch 32 (s, browser CPU backend)")
+    ax.grid(axis="y", visible=False)
+    fig.tight_layout()
+    save(fig, "fig_phones")
+    return {n: float(v) for n, v in zip(names, ms)}
 
 
 def _paired(m, a_meth, b_meth, col):
@@ -374,6 +522,49 @@ def _paired(m, a_meth, b_meth, col):
         return None
     t, p = stats.ttest_rel(j.a, j.b)
     return dict(n=int(len(j)), mean_diff=float((j.a - j.b).mean()), t=float(t), p=float(p))
+
+
+def equal_time(m, hist):
+    """Accuracy every FL method has reached when the proposed scheme finishes its R rounds."""
+    out = {}
+    pairs = []
+    for a in ALPHAS:
+        budget = sel(m, method="hier_proposed", alpha=a).sim_time.mean()
+        if np.isnan(budget):
+            continue
+        out[f"budget_{a}"] = float(budget)
+        per = {}
+        for meth in ("flat_fedavg", "hier_fedavg", "hier_fedprox", "hier_fedprox_dl", "hier_proposed"):
+            r = sel(m, method=meth, alpha=a)
+            if len(r):
+                vals = {int(s): acc_at_time(hist[n], budget) for n, s in zip(r.name, r.seed)}
+                per[meth] = vals
+                out[f"{meth}_{a}"] = float(np.nanmean(list(vals.values())))
+        if "hier_proposed" in per and "hier_fedavg" in per:
+            for s in per["hier_proposed"]:
+                if s in per["hier_fedavg"]:
+                    pairs.append((per["hier_proposed"][s], per["hier_fedavg"][s]))
+    if len(pairs) >= 2:
+        a_, b_ = np.array(pairs).T
+        t, p = stats.ttest_rel(a_, b_)
+        out["ttest_proposed_vs_hfedavg"] = dict(n=len(pairs), mean_diff=float((a_ - b_).mean()), t=float(t), p=float(p))
+    return out
+
+
+def measured_numbers(meas, m):
+    """G4: same methods with phone-measured speed ratios, next to the literature profile."""
+    out = {}
+    for meth in ("hier_fedavg", "hier_fedprox_dl", "hier_proposed"):
+        for a in ALPHAS:
+            r, base = sel(meas, method=meth, alpha=a), sel(m, method=meth, alpha=a)
+            if len(r):
+                out[f"{meth}_{a}"] = dict(
+                    acc=r.acc.mean(), p10=r.p10.mean(), t_target=r.t_target.mean(), sim_time=r.sim_time.mean(),
+                    dropped_frac=float((r.dropped / r.updates).mean()),
+                    wasted_frac=float((r.wasted / r.steps).mean()),
+                    colext_acc=base.acc.mean() if len(base) else None,
+                    colext_t_target=base.t_target.mean() if len(base) else None, n=int(len(r)))
+    return out
 
 
 def key_numbers(df, m):
