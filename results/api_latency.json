@@ -1,0 +1,20 @@
+{
+ "note": "Client and server on the same laptop (loopback), CPU inference, new HTTP connection per request.",
+ "cpu": "AMD64 Family 25 Model 117 Stepping 2, AuthenticAMD",
+ "python": "3.13.12",
+ "single_image": {
+  "n": 300,
+  "median_ms": 2.04,
+  "p95_ms": 3.86,
+  "mean_ms": 2.26
+ },
+ "single_image_agree_with_reference": "300/300",
+ "batch_size": 100,
+ "batch": {
+  "n": 30,
+  "median_ms": 24.59,
+  "p95_ms": 27.31,
+  "mean_ms": 24.58
+ },
+ "batch_images_per_s": 4066.7
+}

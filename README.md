@@ -14,6 +14,8 @@
 <p align="center">
   <a href="paper/main.pdf"><b>Paper (PDF)</b></a> ·
   <a href="docs/DESIGN.md"><b>Design spec</b></a> ·
+  <a href="https://d3athnddemise.github.io/hierarchical-fl-heterogeneous-edge/dashboard/"><b>Results dashboard</b></a> ·
+  <a href="https://d3athnddemise.github.io/hierarchical-fl-heterogeneous-edge/deploy/"><b>Phone demo</b></a> ·
   <a href="#live-demo"><b>Live demo</b></a> ·
   <a href="#reproduce-the-results"><b>Reproduce</b></a> ·
   <a href="phone_benchmark/index.html"><b>Phone benchmark</b></a>
@@ -97,6 +99,8 @@ Time per training step on the 17 phones we measured. The orange bars are the thr
 
 **[Open the live demo](https://d3athnddemise.github.io/hierarchical-fl-heterogeneous-edge/deploy/)** on any phone. The page downloads the global model that federated training produced (float32, or the int8 copy that is 4× smaller), checks its SHA-256 against the version record, and classifies 300 Fashion-MNIST test images in your browser. It reports accuracy, time per image on your device, and how many predictions match PyTorch's on the laptop exactly. On a Redmi Note 12, a mid-range Android phone, it matched PyTorch on all 300 images, with both weight files, at 9–13 ms per image.
 
+The final model reaches 88.1% (macro-F1 87.8%). Shirt is its hardest class: one shirt in five is taken for a T-shirt (per-class precision, recall, F1 and the confusion matrix are in `results/per_class.json` and the paper).
+
 On the PC side, `export_model.py` trains and exports the versioned model (it checks the PyTorch-to-TensorFlow.js layout conversion before writing anything), and `serve_model.py` serves it over HTTP:
 
 ```bash
@@ -105,6 +109,12 @@ python serve_model.py --port 8080
 curl http://localhost:8080/model                                   # version, source run, accuracy, hashes
 curl -X POST http://localhost:8080/predict -d '{"images": [[0, 0, ..., 0]]}'  # 784 pixel values per image
 ```
+
+`python bench_api.py` measures the API: on our laptop a single-image request takes 2.0 ms (median, loopback) and a batch of 100 takes 25 ms.
+
+## Results dashboard
+
+**[Open the dashboard](https://d3athnddemise.github.io/hierarchical-fl-heterogeneous-edge/dashboard/)** to explore all 192 runs. Pick a configuration and compare its methods round by round: test accuracy, the mean, 10th-percentile and worst per-device accuracy, time per edge round, and traffic at the server or on the gateways' Wi-Fi, averaged over seeds, with a summary table that includes time and rounds to target. `analyze.py` regenerates its data (`dashboard/runs.json`) from the run files.
 
 ## Engineering notes
 
@@ -153,7 +163,11 @@ run.py               one experiment -> results/runs/<name>.json
 sweep.py             the experiment grid, in parallel and resumable
 analyze.py           figures, LaTeX tables and statistics from the run files
 demo.py              live demo, 2 gateways x 3 devices
-deploy_check.py      model size and accuracy in float32 and int8
+deploy_check.py      final model: float32 vs int8, per-class metrics, confusion matrix
+export_model.py      versioned export of the final model (PyTorch, TF.js float32 and int8)
+serve_model.py       PC inference API; bench_api.py measures its latency
+deploy/              phone page that runs the exported model (GitHub Pages)
+dashboard/           results dashboard for all runs (GitHub Pages)
 phone_benchmark/     browser page that times training on a real phone
 docs/DESIGN.md       research questions, parameters with sources, cost model, experiment grid
 paper/               IEEE conference paper (LaTeX source and PDF)

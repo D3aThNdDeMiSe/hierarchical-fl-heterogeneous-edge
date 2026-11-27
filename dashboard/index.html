@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FL Results Dashboard</title>
+<meta name="description" content="Per-round accuracy, per-device accuracy, round time and traffic for all 192 simulation runs.">
+<style>
+  :root {
+    --bg: #ffffff; --head: #17151c; --ink: #1e1b24; --soft: #4a4552; --muted: #77717f;
+    --line: #e6e3ea; --panel: #f6f4f8; --rasp: #c8235a; --rasp-light: #e0457b;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; }
+  header { background: var(--head); color: #f4f2f6; padding: 22px 16px 20px; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 16px; }
+  header .wrap { padding: 0; }
+  .kicker { color: var(--rasp-light); font: 600 12px/1.2 "Bahnschrift", system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase; }
+  h1 { font: 700 28px/1.15 "Bahnschrift", system-ui, sans-serif; margin: 8px 0 8px; }
+  header p { color: #c9c4d0; margin: 0; line-height: 1.5; max-width: 760px; }
+  header nav { margin-top: 12px; display: flex; gap: 16px; flex-wrap: wrap; }
+  header nav a { color: #f2b5c8; font-size: 14px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: end; margin: 18px 0 8px; }
+  label.ctl { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--muted); }
+  select { font: inherit; font-size: 14px; color: var(--ink); padding: 8px 10px; border: 1px solid #cfc9d6; border-radius: 10px; background: #fff; max-width: 100%; }
+  .seg { display: inline-flex; background: var(--panel); border-radius: 999px; padding: 3px; }
+  .seg button { border: 0; background: transparent; color: var(--soft); padding: 7px 12px; border-radius: 999px; font-size: 13.5px; cursor: pointer; }
+  .seg button.on { background: var(--ink); color: #fff; }
+  .series { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
+  .series label { display: inline-flex; align-items: center; gap: 7px; font-size: 13.5px; background: var(--panel); padding: 6px 10px; border-radius: 999px; cursor: pointer; user-select: none; }
+  .series input { margin: 0; accent-color: var(--ink); }
+  .sw { width: 18px; height: 3px; border-radius: 2px; display: inline-block; }
+  .charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 14px; }
+  @media (max-width: 760px) { .charts { grid-template-columns: 1fr; } }
+  .chart { border: 1px solid var(--line); border-radius: 14px; padding: 12px 12px 6px; min-width: 0; }
+  .chart h3 { margin: 0 0 2px; font-size: 14.5px; }
+  .chart p { margin: 0 0 8px; color: var(--muted); font-size: 12.5px; }
+  .canvas { position: relative; height: 260px; }
+  .tablewrap { overflow-x: auto; margin-top: 18px; border: 1px solid var(--line); border-radius: 14px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; background: var(--panel); }
+  th:first-child, td:first-child { text-align: left; }
+  td .sw { margin-right: 8px; vertical-align: middle; }
+  footer { color: var(--muted); font-size: 12.5px; line-height: 1.55; margin: 18px 0 40px; }
+  a { color: var(--rasp); }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="kicker">Hierarchical federated learning · results dashboard</div>
+    <h1>Every run, round by round</h1>
+    <p>All 192 simulation runs of the study. Pick a configuration to compare its methods, averaged over seeds:
+      accuracy, how the worst-served devices fare, how long each round takes and how much traffic it causes.</p>
+    <nav>
+      <a href="../deploy/">Phone demo</a>
+      <a href="https://github.com/D3aThNdDeMiSe/hierarchical-fl-heterogeneous-edge">Repository</a>
+      <a href="https://github.com/D3aThNdDeMiSe/hierarchical-fl-heterogeneous-edge/blob/main/paper/main.pdf">Paper (PDF)</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="controls">
+    <label class="ctl">Configuration <select id="cfg"></select></label>
+    <div class="ctl" style="display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--muted)">X axis
+      <div class="seg" id="xseg"><button data-v="round" class="on">Edge round</button><button data-v="t">Simulated time</button></div>
+    </div>
+    <div class="ctl" style="display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--muted)">Per-device accuracy
+      <div class="seg" id="dseg"><button data-v="p10" class="on">Worst 10%</button><button data-v="min">Worst device</button><button data-v="mean">Mean</button></div>
+    </div>
+    <div class="ctl" style="display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--muted)">Traffic
+      <div class="seg" id="tseg"><button data-v="srv" class="on">At the server</button><button data-v="lan">Gateway Wi-Fi</button></div>
+    </div>
+  </div>
+  <div class="series" id="series" aria-label="Methods shown"></div>
+
+  <div class="charts">
+    <section class="chart"><h3>Test accuracy</h3><p>Global model on the 10,000-image test set</p><div class="canvas"><canvas id="c-acc"></canvas></div></section>
+    <section class="chart"><h3 id="dev-title">Worst-served 10% of devices</h3><p>Global model scored on each device's own class mix</p><div class="canvas"><canvas id="c-dev"></canvas></div></section>
+    <section class="chart"><h3>Time per edge round</h3><p>Simulated seconds per edge round, between evaluations</p><div class="canvas"><canvas id="c-rt"></canvas></div></section>
+    <section class="chart"><h3 id="traffic-title">Traffic at the server</h3><p>Cumulative megabytes of model weights</p><div class="canvas"><canvas id="c-tr"></canvas></div></section>
+  </div>
+
+  <div class="tablewrap"><table id="tbl"></table></div>
+
+  <footer>
+    Means over seeds; each run is a seed. Time to target: first evaluation at which the global model reaches 90% of the final
+    centralised accuracy for the same dataset and skew. Per-device accuracy is the global model's accuracy weighted by each
+    device's own class mix; the runs store the mean, 10th percentile and minimum over devices. Energy is not modelled.
+    Raw run files: <a href="https://github.com/D3aThNdDeMiSe/hierarchical-fl-heterogeneous-edge/tree/main/results/runs">results/runs</a>.
+  </footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const DASH = [[], [6, 4], [2, 3], [10, 3, 2, 3]];
+const DS_NAME = { fmnist: 'Fashion-MNIST', cifar10: 'CIFAR-10' };
+const TIER_NAME = { mixed: 'mixed tiers', mid: 'all mid-tier', low_heavy: 'mostly low-tier' };
+let D, state = { x: 'round', dev: 'p10', tr: 'srv' }, charts = {}, hidden = new Set();
+
+const cfgKey = (r) => [r.dataset, r.alpha, r.E, r.K, r.tiers, r.profile].join('|');
+const serKey = (r) => [r.method, r.dq, r.mu].join('|');
+function serLabel(r) {
+  let s = D.labels[r.method];
+  if (r.dq !== 0.5) s += `, deadline q = ${r.dq}`;
+  if (Math.abs(r.mu - 0.01) > 1e-9 && ['hier_fedprox', 'hier_fedprox_dl', 'hier_proposed'].includes(r.method)) s += `, μ = ${r.mu}`;
+  return s;
+}
+function cfgLabel(r) {
+  const a = r.alpha === 'iid' ? 'IID' : `α = ${r.alpha}`;
+  const p = r.profile === 'measured' ? ', our phones\' speeds' : '';
+  return `${DS_NAME[r.dataset]} · ${a} · ${r.E} gateways × ${r.K} devices · ${TIER_NAME[r.tiers]}${p}`;
+}
+function cfgGroup(r) {
+  if (r.dataset === 'cifar10') return 'CIFAR-10';
+  if (r.profile === 'measured') return 'Our phones\' measured speeds';
+  if (r.tiers !== 'mixed') return 'Device-tier mix';
+  if (r.E !== 4 || r.K !== 5) return 'Scaling';
+  return 'Main configuration (deadline and FedProx variants included)';
+}
+
+function mean(a) { return a.reduce((x, y) => x + y, 0) / a.length; }
+function aggregate(runs, field) {           // mean over seeds at each evaluated round present in every seed
+  const by = new Map();
+  for (const r of runs) r.h.round.forEach((rd, i) => { if (!by.has(rd)) by.set(rd, []); by.get(rd).push(r.h[field][i]); });
+  return [...by.entries()].filter(([, v]) => v.length === runs.length).sort((a, b) => a[0] - b[0]).map(([rd, v]) => [rd, mean(v)]);
+}
+function roundTime(runs) {
+  const t = new Map(aggregate(runs, 't'));
+  const rounds = [...t.keys()];
+  return rounds.map((rd, i) => [rd, i === 0 ? t.get(rd) / rd : (t.get(rd) - t.get(rounds[i - 1])) / (rd - rounds[i - 1])]);
+}
+function toTarget(runs, target) {
+  const res = runs.map((r) => { const i = r.h.acc.findIndex((v) => v >= target); return i < 0 ? null : [r.h.t[i], r.h.round[i]]; });
+  const ok = res.filter(Boolean);
+  if (ok.length < res.length) return { t: `n.r. (${ok.length}/${res.length})`, r: 'n.r.' };
+  return { t: mean(ok.map((x) => x[0])).toFixed(0), r: mean(ok.map((x) => x[1])).toFixed(0) };
+}
+
+function buildSelect() {
+  const groups = new Map();
+  for (const r of D.runs) {
+    const k = cfgKey(r);
+    const g = cfgGroup(r);
+    if (!groups.has(g)) groups.set(g, new Map());
+    if (!groups.get(g).has(k)) groups.get(g).set(k, cfgLabel(r));
+  }
+  const order = ['Main configuration (deadline and FedProx variants included)', 'Device-tier mix', 'Scaling', 'Our phones\' measured speeds', 'CIFAR-10'];
+  const sel = $('cfg');
+  for (const g of order) {
+    if (!groups.has(g)) continue;
+    const og = document.createElement('optgroup'); og.label = g;
+    [...groups.get(g).entries()].sort((a, b) => a[1].localeCompare(b[1], 'en', { numeric: true }))
+      .forEach(([k, lab]) => { const o = document.createElement('option'); o.value = k; o.textContent = lab; og.append(o); });
+    sel.append(og);
+  }
+  sel.value = 'fmnist|0.5|4|5|mixed|colext';
+}
+
+function seriesFor(cfg) {
+  const runs = D.runs.filter((r) => cfgKey(r) === cfg);
+  const m = new Map();
+  for (const r of runs) { const k = serKey(r); if (!m.has(k)) m.set(k, []); m.get(k).push(r); }
+  const order = ['centralised', 'local', 'flat_fedavg', 'hier_fedavg', 'hier_fedprox', 'hier_fedprox_dl', 'hier_proposed'];
+  const variantIx = {};
+  return [...m.entries()].sort((a, b) => order.indexOf(a[1][0].method) - order.indexOf(b[1][0].method) || a[0].localeCompare(b[0]))
+    .map(([k, rs]) => {
+      const meth = rs[0].method; variantIx[meth] = (variantIx[meth] ?? -1) + 1;
+      return { key: k, runs: rs, method: meth, label: serLabel(rs[0]), color: D.colors[meth], dash: DASH[variantIx[meth] % DASH.length] };
+    });
+}
+
+function chartOpts(yTitle, yFmt, xTitle) {
+  return {
+    responsive: true, maintainAspectRatio: false, animation: false, parsing: false, normalized: true,
+    interaction: { mode: 'nearest', axis: 'x', intersect: false },
+    plugins: { legend: { display: false },
+      tooltip: { callbacks: { label: (c) => ` ${c.dataset.label}: ${yFmt(c.parsed.y)}`, title: (items) => `${xTitle} ${items[0].parsed.x.toFixed(state.x === 't' ? 1 : 0)}` } } },
+    scales: {
+      x: { type: 'linear', title: { display: true, text: xTitle, color: '#77717f' }, grid: { color: '#eeecf1' }, ticks: { color: '#77717f' } },
+      y: { title: { display: true, text: yTitle, color: '#77717f' }, grid: { color: '#eeecf1' }, ticks: { color: '#77717f', callback: (v) => yFmt(v) } },
+    },
+    elements: { point: { radius: 0, hoverRadius: 4 }, line: { borderWidth: 2, tension: 0 } },
+  };
+}
+
+function draw() {
+  const cfg = $('cfg').value;
+  const series = seriesFor(cfg);
+  const ds = cfg.split('|')[0], alpha = cfg.split('|')[1];
+  const target = (D.targets[ds] || {})[alpha];
+  // series toggles
+  const box = $('series'); box.replaceChildren();
+  for (const s of series) {
+    const l = document.createElement('label');
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !hidden.has(s.key);
+    cb.onchange = () => { cb.checked ? hidden.delete(s.key) : hidden.add(s.key); draw(); };
+    const sw = document.createElement('span'); sw.className = 'sw';
+    sw.style.background = s.dash.length ? `repeating-linear-gradient(90deg, ${s.color} 0 6px, transparent 6px 9px)` : s.color;
+    l.append(cb, sw, document.createTextNode(s.label + (s.method === 'local' ? ' (table only)' : '')));
+    box.append(l);
+  }
+  const shown = series.filter((s) => !hidden.has(s.key) && s.method !== 'local');
+  const xT = state.x === 't' ? 'simulated time (s)' : 'edge round';
+  const pct = (v) => (100 * v).toFixed(1) + '%';
+  const mk = (s, pts) => ({ label: s.label, data: pts.map(([x, y]) => ({ x, y })), borderColor: s.color, backgroundColor: s.color, borderDash: s.dash });
+  function xy(s, field) {
+    if (state.x === 'round') return aggregate(s.runs, field);
+    const t = aggregate(s.runs, 't'), v = new Map(aggregate(s.runs, field));
+    return t.map(([rd, tt]) => [tt, v.get(rd)]);
+  }
+  const fl = shown.filter((s) => s.method !== 'centralised');
+  const maxT = Math.max(1, ...fl.map((s) => { const a = aggregate(s.runs, 't'); return a.length ? a[a.length - 1][1] : 0; }));
+  const accSets = shown.map((s) => {
+    if (s.method === 'centralised' && state.x === 't') { const f = mean(s.runs.map((r) => r.h.acc[r.h.acc.length - 1])); return mk(s, [[0, f], [maxT, f]]); }
+    return mk(s, xy(s, 'acc'));
+  });
+  if (target && fl.length) accSets.push({ label: '90% of centralised (target)', data: [{ x: 0, y: target }, { x: state.x === 't' ? maxT : 60, y: target }],
+    borderColor: '#b9b3c1', borderDash: [3, 3], borderWidth: 1, pointRadius: 0 });
+  const devName = { p10: 'Worst-served 10% of devices', min: 'Worst-served device', mean: 'Mean over devices' }[state.dev];
+  $('dev-title').textContent = devName;
+  const devSets = shown.map((s) => (s.method === 'centralised' && state.x === 't')
+    ? (() => { const f = mean(s.runs.map((r) => r.h[state.dev][r.h[state.dev].length - 1])); return mk(s, [[0, f], [maxT, f]]); })()
+    : mk(s, xy(s, state.dev)));
+  const rtSets = fl.map((s) => {
+    const rt = roundTime(s.runs);
+    if (state.x === 'round') return mk(s, rt);
+    const t = new Map(aggregate(s.runs, 't'));
+    return mk(s, rt.map(([rd, v]) => [t.get(rd), v]));
+  });
+  $('traffic-title').textContent = state.tr === 'srv' ? 'Traffic at the server' : 'Traffic on the gateways\' Wi-Fi';
+  const trSets = fl.map((s) => mk(s, xy(s, state.tr)));
+  const specs = [['c-acc', accSets, 'test accuracy', pct], ['c-dev', devSets, 'accuracy', pct],
+    ['c-rt', rtSets, 'seconds per edge round', (v) => (+v).toFixed(2) + ' s'], ['c-tr', trSets, 'megabytes', (v) => (+v).toFixed(1) + ' MB']];
+  for (const [id, sets, yT, fmt] of specs) {
+    if (charts[id]) charts[id].destroy();
+    charts[id] = new Chart($(id), { type: 'line', data: { datasets: sets }, options: chartOpts(yT, fmt, xT) });
+  }
+  // summary table
+  const head = ['Method', 'Seeds', 'Final accuracy', 'Worst 10%', 'Time to target (s)', 'Rounds to target', 'Run time (s)',
+    'Server MB', 'Wi-Fi MB', 'Dropped', 'Gateway round (s)', 'Aggregation (ms)'];
+  const t = $('tbl'); t.replaceChildren();
+  const tr0 = document.createElement('tr'); head.forEach((h) => { const th = document.createElement('th'); th.textContent = h; tr0.append(th); }); t.append(tr0);
+  for (const s of series) {
+    const last = (f) => mean(s.runs.map((r) => r.h[f][r.h[f].length - 1]));
+    const isFL = !['centralised', 'local'].includes(s.method);
+    const tt = isFL && target ? toTarget(s.runs, target) : { t: '–', r: '–' };
+    const ert = s.runs.map((r) => r.edge_round_s).filter((v) => v != null), agg = s.runs.map((r) => r.agg_ms).filter((v) => v != null);
+    const sd = Math.sqrt(mean(s.runs.map((r) => (r.h.acc[r.h.acc.length - 1] - last('acc')) ** 2)));
+    const cells = [s.label, s.runs.length, `${(100 * last('acc')).toFixed(1)}% ± ${(100 * sd).toFixed(1)}`, pct(last('p10')), tt.t, tt.r,
+      isFL ? last('t').toFixed(0) : '–', isFL ? last('srv').toFixed(1) : '–', isFL ? last('lan').toFixed(1) : '–',
+      isFL ? (100 * last('drop') / Math.max(1, last('upd'))).toFixed(1) + '%' : '–',
+      ert.length ? mean(ert).toFixed(2) : '–', agg.length ? mean(agg).toFixed(1) : '–'];
+    const tr = document.createElement('tr');
+    cells.forEach((c, i) => {
+      const td = document.createElement('td');
+      if (i === 0) { const sw = document.createElement('span'); sw.className = 'sw'; sw.style.background = s.color; td.append(sw); }
+      td.append(document.createTextNode(String(c))); tr.append(td);
+    });
+    t.append(tr);
+  }
+}
+
+function seg(id, key) {
+  $(id).querySelectorAll('button').forEach((b) => b.onclick = () => {
+    $(id).querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+    state[key] = b.dataset.v; draw();
+  });
+}
+
+(async () => {
+  D = await (await fetch('runs.json')).json();
+  buildSelect();
+  $('cfg').onchange = () => { hidden.clear(); draw(); };
+  seg('xseg', 'x'); seg('dseg', 'dev'); seg('tseg', 'tr');
+  draw();
+})();
+</script>
+</body>
+</html>

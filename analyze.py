@@ -186,6 +186,8 @@ def main():
     table_scaling(df)
     stats_out["deadline_sensitivity"] = table_deadline(main_cfg, deadlines)
     stats_out["cifar10"] = table_cifar(cifar, hist)
+    all_runs = pd.concat([df, measured, deadlines, fedprox_mu, cifar])
+    stats_out["dashboard_runs"] = dashboard_data(all_runs, hist, targets, stats_out["cifar10"]["targets"])
     stats_out["phones_step_s"] = fig_phones()
     fig_rq1(df, main_cfg, measured)
     fig_rq2(main_cfg, hist)
@@ -224,11 +226,12 @@ def write_summary(df):
 
 
 def table_main(m):
-    lines = [r"\begin{tabular}{l cc cc cc ccc}", r"\toprule",
+    lines = [r"\begin{tabular}{l cc cc cc cccc}", r"\toprule",
              r" & \multicolumn{2}{c}{$\alpha = 0.1$} & \multicolumn{2}{c}{$\alpha = 0.5$} & "
-             r"\multicolumn{2}{c}{$\alpha = 1.0$} & \multicolumn{3}{c}{$\alpha = 0.5$} \\",
-             r"\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}\cmidrule(lr){8-10}",
-             r"Method & Acc & P10 & Acc & P10 & Acc & P10 & $T_{\mathrm{tgt}}$ (s) & Server (MB) & Dropped (\%) \\",
+             r"\multicolumn{2}{c}{$\alpha = 1.0$} & \multicolumn{4}{c}{$\alpha = 0.5$} \\",
+             r"\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}\cmidrule(lr){8-11}",
+             r"Method & Acc & P10 & Acc & P10 & Acc & P10 & $T_{\mathrm{tgt}}$ (s) & $R_{\mathrm{tgt}}$ & "
+             r"Server (MB) & Dropped (\%) \\",
              r"\midrule"]
     fl = [x for x in ORDER if x not in ("centralised", "local")]
     best = {}
@@ -247,10 +250,11 @@ def table_main(m):
                 cells.append(f"\\textbf{{{s}}}" if best.get((a, col)) == meth and s != "--" else s)
         r = sel(m, method=meth, alpha="0.5")
         if meth in ("centralised", "local") or r.empty:
-            cells += ["--", "--", "--"]
+            cells += ["--", "--", "--", "--"]
         else:
-            tt = r.t_target
+            tt, rt = r.t_target, r.r_target
             cells.append(f"{tt.mean():.0f}" if tt.notna().all() else f"n.r.\\,({tt.notna().sum()}/{len(tt)})")
+            cells.append(f"{rt.mean():.0f}" if rt.notna().all() else "n.r.")
             cells.append(f"{r.bytes_server.mean() / 1e6:.1f}")
             cells.append(f"{100 * (r.dropped / r.updates).mean():.1f}")
         lines.append(" & ".join(cells) + r" \\")
@@ -532,6 +536,30 @@ def fig_phones():
     fig.tight_layout()
     save(fig, "fig_phones")
     return {n: float(v) for n, v in zip(names, ms)}
+
+
+def dashboard_data(df, hist, targets, cifar_targets):
+    """Compact per-run histories for the results dashboard (dashboard/runs.json)."""
+    out_dir = os.path.join(ROOT, "dashboard")
+    os.makedirs(out_dir, exist_ok=True)
+    data = {"targets": {"fmnist": targets, "cifar10": cifar_targets}, "labels": LABEL, "colors": COLOR, "runs": []}
+    for _, r in df.sort_values("name").iterrows():
+        with open(os.path.join(RUNS, r["name"] + ".json")) as f:
+            setup = json.load(f)["setup"]
+        h = hist[r["name"]]
+        data["runs"].append(dict(
+            name=r["name"], method=r.method, dataset=r.dataset, alpha=r.alpha, E=int(r.E), K=int(r.K),
+            tiers=r.tiers, profile=r.profile, dq=float(r.dq), mu=float(r.mu), seed=int(r.seed),
+            edge_round_s=setup.get("edge_round_time_mean_s"), agg_ms=None if setup.get("gw_agg_time_mean_s") is None
+            else round(1e3 * setup["gw_agg_time_mean_s"], 2),
+            h=dict(round=[e["round"] for e in h], t=[round(e["sim_time"], 2) for e in h],
+                   acc=[round(e["acc"], 4) for e in h], mean=[round(e["client_acc_mean"], 4) for e in h],
+                   p10=[round(e["client_acc_p10"], 4) for e in h], min=[round(e["client_acc_min"], 4) for e in h],
+                   srv=[round(e["bytes_server"] / 1e6, 3) for e in h], lan=[round(e["bytes_edge"] / 1e6, 3) for e in h],
+                   upd=[e["updates"] for e in h], drop=[e["dropped"] for e in h])))
+    with open(os.path.join(out_dir, "runs.json"), "w") as f:
+        json.dump(data, f, separators=(",", ":"))
+    return len(data["runs"])
 
 
 def table_fedprox(m, fp):
