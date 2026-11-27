@@ -12,8 +12,8 @@ stated as such in the paper.
 - Raspberry Pis were not allotted, so gateways are **emulated** with Pi-class resource
   profiles. Device speeds use published phone measurements (CoLExT [4]) and, when available,
   measurements of our own phones (`phone_benchmark/`).
-- Dataset: **Fashion-MNIST** (used by FedAda [8], ESPerHFL [10], MTGC [7], HAF-Edge [13]).
-  CIFAR-10 is optional.
+- Dataset: **Fashion-MNIST** (used by FedAda [8], ESPerHFL [10], MTGC [7], HAF-Edge [13]),
+  plus **CIFAR-10** as a harder second dataset (G6).
 
 ## 2. Research questions → experiments → metrics
 
@@ -145,7 +145,9 @@ maximum local computation. Evaluation happens at every global sync (flat: every 
   (q = 0.5 is in G1), α ∈ {0.1, 0.5}, seeds {0, 1, 2}. 12 runs.
 - **G6 CIFAR-10** (second dataset shared by FedAda, FedUC, ESPerHFL, MTGC): E=4, K=5, tiers `mixed`,
   α ∈ {0.1, 0.5}, methods {centralised, flat_fedavg, hier_fedavg, hier_fedprox_dl, hier_proposed},
-  seeds {0, 1, 2}. SmallCNN with 3 input channels and hidden 40 (87,458 params). 30 runs; 180 in total.
+  seeds {0, 1, 2}. SmallCNN with 3 input channels and hidden 40 (87,458 params). 30 runs.
+- **G7 FedProx strength** (RQ3): hier_fedprox with μ ∈ {0.1, 1.0} (μ = 0.01 is in G1), E=4, K=5,
+  tiers `mixed`, α ∈ {0.1, 0.5}, seeds {0, 1, 2}. 12 runs; 192 in total.
 
 Phone measurements (TF.js CPU backend, batch 32, median ms/step; inference ms/sample):
 POCO F3 1,607 / 3.8; Redmi Note 12 4,665 / 9.3; Vivo Y31 8,124 / 25.5.

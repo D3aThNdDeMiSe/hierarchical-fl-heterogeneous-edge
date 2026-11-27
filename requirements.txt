@@ -1,6 +1,11 @@
-torch>=2.3
-torchvision>=0.18
-numpy>=1.26
-pandas>=2.0
-scipy>=1.11
-matplotlib>=3.8
+# Versions used for every result in this repository (Python 3.13).
+# For a CUDA build of PyTorch, install torch/torchvision from https://pytorch.org first
+# (we used torch 2.8.0+cu128). The CPU build also works, only slower; numbers can differ
+# slightly from ours because floating-point results differ between CPU and GPU.
+torch==2.8.0
+torchvision==0.23.0
+numpy==2.4.4
+pandas==3.0.6
+scipy==1.17.1
+matplotlib==3.10.8
+pytest==9.1.1

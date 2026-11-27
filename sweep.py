@@ -58,13 +58,20 @@ def grid():
             for m in ("centralised", "flat_fedavg", "hier_fedavg", "hier_fedprox_dl", "hier_proposed"):
                 jobs.append(dict(group="G6", method=m, alpha=alpha, E=4, K=5, tiers="mixed", seed=seed,
                                  dataset="cifar10"))
+        # G7 FedProx strength (RQ3): mu = 0.01 is in G1; stronger proximal terms for H-FedProx
+        for alpha in ("0.1", "0.5"):
+            for mu in (0.1, 1.0):
+                jobs.append(dict(group="G7", method="hier_fedprox", alpha=alpha, E=4, K=5, tiers="mixed",
+                                 seed=seed, mu=mu))
     for j in jobs:
         j.setdefault("profile", "colext")
         j.setdefault("dq", 0.5)
         j.setdefault("dataset", "fmnist")
+        j.setdefault("mu", 0.01)
         j["name"] = Config(method=j["method"], alpha=None if j["alpha"] == "iid" else float(j["alpha"]),
                            gateways=j["E"], clients_per_gateway=j["K"], tiers=j["tiers"], seed=j["seed"],
-                           profile=j["profile"], deadline_quantile=j["dq"], dataset=j["dataset"]).name
+                           profile=j["profile"], deadline_quantile=j["dq"], dataset=j["dataset"],
+                           mu=j["mu"]).name
     return jobs
 
 
@@ -109,7 +116,8 @@ def main():
             time.sleep(4 * i)  # stagger CUDA initialisation; simultaneous starts can fail on Windows
         args = [sys.executable, os.path.join(ROOT, "run.py"), "--method", j["method"], "--alpha", j["alpha"],
                 "--E", str(j["E"]), "--K", str(j["K"]), "--tiers", j["tiers"], "--seed", str(j["seed"]),
-                "--profile", j["profile"], "--deadline-q", str(j["dq"]), "--dataset", j["dataset"]]
+                "--profile", j["profile"], "--deadline-q", str(j["dq"]), "--dataset", j["dataset"],
+                "--mu", str(j["mu"])]
         with lock:
             state["running"].append(j["name"])
             write_status()

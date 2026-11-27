@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/PyTorch-2.8-EE4C2C?logo=pytorch&logoColor=white" alt="PyTorch 2.8">
   <img src="https://img.shields.io/badge/TensorFlow.js-phone%20benchmark-FF6F00?logo=tensorflow&logoColor=white" alt="TensorFlow.js phone benchmark">
   <img src="https://img.shields.io/badge/paper-IEEE%20format-00629B?logo=latex&logoColor=white" alt="IEEE-format paper">
-  <img src="https://img.shields.io/badge/experiments-180%20runs-C8235A" alt="180 experiment runs">
+  <img src="https://img.shields.io/badge/experiments-192%20runs-C8235A" alt="192 experiment runs">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-4A4552" alt="MIT license"></a>
 </p>
 
@@ -25,7 +25,7 @@ Federated learning keeps personal data on the phone: the model goes to the data 
 
 Short version: the edge tier is worth having, slow phones should get less work rather than be dropped, and a Pi-class gateway runs out of Wi-Fi long before it runs out of CPU.
 
-This repository has the simulator we built to find that out, the 180 experiments we ran with it, a browser benchmark we used to time training on real phones, and the IEEE-format paper with the results.
+This repository has the simulator we built to find that out, the 192 experiments we ran with it, a browser benchmark we used to time training on real phones, and the IEEE-format paper with the results.
 
 ## Results at a glance
 
@@ -33,8 +33,8 @@ This repository has the simulator we built to find that out, the 180 experiments
 |---|---|
 | **What does heterogeneity cost?** | Skewed data costs accuracy: 1.4 / 2.0 / 5.2 points below centralised training as label skew grows (α = 1.0 / 0.5 / 0.1), and the worst-served 10% of devices lose most. Slow hardware costs time, not accuracy: 51% longer to reach the target with mostly slow devices, about 2× with our own phones' speeds. |
 | **Is the edge tier worth it?** | Yes. Same accuracy as flat FedAvg (p = 0.86) with **10× less traffic at the server**. |
-| **Do the slow-device mechanisms help?** | A deadline alone throws away about half the updates. Giving slow devices fewer local steps instead drops only 6%, reaches the target **30–42% sooner** and is the most accurate at equal time (+1.6 points, p = 0.017). It ends 1.35 points lower after an equal number of rounds, and a looser deadline recovers most of that. |
-| **What breaks first as it scales?** | The gateway's shared Wi-Fi, well before its CPU or memory. At 25 devices per gateway, moving the model takes longer than training it, so about 10 devices per gateway is the practical limit. |
+| **Do the slow-device mechanisms help?** | A deadline alone throws away about half the updates. Giving slow devices fewer local steps instead drops only 6%, reaches the target **30–42% sooner** and is the most accurate at equal time (+1.6 points, p = 0.017). It ends 1.35 points lower after an equal number of rounds, and a looser deadline recovers most of that. FedProx has no effect at μ = 0.01 and slows training at larger μ. |
+| **What breaks first as it scales?** | The gateway's shared Wi-Fi, well before its CPU or memory. At 25 devices per gateway, moving the model takes longer than training it. With our assumed Wi-Fi speed and step time the limit is about 10 devices per gateway; the paper gives a formula for other settings. |
 | **Does it hold up?** | With measured phone speeds the time saving grows to 42–57%. On CIFAR-10 the conclusions hold, with a sharper speed–accuracy trade-off under extreme skew. An int8 copy of the final model is 4× smaller (322 KB → 81 KB) and loses 0.05 points. |
 
 We timed training on 17 phones, from budget Android models to the iPhone 17 Pro Max. Leave out the fastest and slowest 10% and they still differ by **6×** in time per training step, and by 13× at the extremes (1.0 s on the iPhone 17 Pro Max, 13.9 s on a Galaxy A32). That's more than twice the 2.3× gap reported by the phone testbed we took our defaults from.
@@ -47,7 +47,7 @@ We timed training on 17 phones, from budget Android models to the iPhone 17 Pro 
 
 Each device is high, mid or low tier. Its compute and upload speeds come from the CoLExT phone testbed (or from our own phone measurements), with some random jitter each round.
 
-The gateways are emulated Raspberry Pi 4-class nodes. Their devices share one Wi-Fi link, memory is capped at 4 GB, every update costs some aggregation time, and a broadband uplink connects them to the server. A gateway keeps a running weighted average, so it only ever holds two models in memory, however many devices report to it. Every second edge round the server averages the gateway models (HierFAVG-style).
+The gateways are emulated Raspberry Pi 4-class nodes. Their devices share one Wi-Fi link, they have 4 GB of RAM to check aggregation memory against, every update costs some aggregation time, and a broadband uplink connects them to the server. A gateway keeps a running weighted average, so it only ever holds two models in memory, however many devices report to it. Every second edge round the server averages the gateway models (HierFAVG-style).
 
 Nothing in the simulator sleeps. It keeps its own clock and counts every byte, so a 60-round run takes a few minutes on a laptop GPU and still reports round latency and traffic at each tier.
 
@@ -69,11 +69,15 @@ Under strong label skew, adaptive workload pulls ahead early (left). A deadline 
 <summary><b>More figures: cost of heterogeneity, scaling, measured phones</b></summary>
 <br>
 
+How skewed the devices' data is: the share of each class on each of the 20 devices.
+
+<p align="center"><img src="docs/assets/fig_label_mix.png" alt="Heatmap of each device's class mix at three levels of label skew" width="640"></p>
+
 Skewed data costs accuracy; slow hardware costs time.
 
 <p align="center"><img src="docs/assets/fig_rq1_heterogeneity.png" alt="Accuracy against label skew and time to target by device-tier mix" width="720"></p>
 
-Accuracy and time per round as the number of devices per gateway (K) and of gateways (E) grows. Past about 10 devices per gateway, the shared Wi-Fi makes rounds slower again.
+Accuracy and time per round as the number of devices per gateway (K) and of gateways (E) grows. Past about 10 devices per gateway (with our assumed Wi-Fi speed), the shared link makes rounds slower again.
 
 <p align="center"><img src="docs/assets/fig_rq4_scaling.png" alt="Accuracy and round time as K and E grow" width="720"></p>
 
@@ -109,8 +113,11 @@ pip install -r requirements.txt
 # one experiment (downloads Fashion-MNIST into data/ on first use)
 python run.py --method hier_proposed --alpha 0.5 --E 4 --K 5 --tiers mixed --seed 0
 
-# the full grid, groups G1-G6: 180 runs, about 4-5 hours on an RTX 5060 laptop GPU with 4 workers
-python sweep.py --groups G1,G2,G3,G4,G5,G6 --workers 4
+# the full grid, groups G1-G7: 192 runs, about 5 hours on an RTX 5060 laptop GPU with 4 workers
+python sweep.py --groups G1,G2,G3,G4,G5,G6,G7 --workers 4
+
+# tests (about a minute; the last one needs Fashion-MNIST downloaded)
+python -m pytest -q
 
 # figures, tables and statistics for the paper
 python analyze.py
@@ -137,7 +144,8 @@ deploy_check.py      model size and accuracy in float32 and int8
 phone_benchmark/     browser page that times training on a real phone
 docs/DESIGN.md       research questions, parameters with sources, cost model, experiment grid
 paper/               IEEE conference paper (LaTeX source and PDF)
-results/             all 180 run files, summary.txt, stats.json
+results/             all 192 run files, summary.txt, stats.json
+tests/               invariants: partitioning, streaming aggregation, byte accounting, run names
 ```
 
 </details>
@@ -155,7 +163,7 @@ The `measured` device profile reads one high, one mid and one low phone from `ph
 
 ## Limitations
 
-The gateways are emulated from Raspberry Pi 4 specifications rather than measured on a board, phone speeds come from a browser benchmark, and links have fixed rates with no contention or packet loss. The model is small (80,602 parameters), so gateway memory never becomes the constraint. The paper's discussion section covers what each of these means for the results.
+The gateways are emulated from Raspberry Pi 4 specifications (we did not measure a real board), phone speeds come from a browser benchmark, and links have fixed rates with no contention or packet loss. The model is small (80,602 parameters), so gateway memory never becomes the constraint. The paper's discussion section covers what each of these means for the results.
 
 ## Citation
 

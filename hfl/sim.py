@@ -56,8 +56,9 @@ class Config:
         a = "iid" if self.alpha is None else f"a{self.alpha:g}"
         p = "" if self.profile == "colext" else f"_{self.profile}"
         d = "" if self.deadline_quantile == 0.5 else f"_dq{self.deadline_quantile:g}"
+        u = "" if self.mu == 0.01 else f"_mu{self.mu:g}"   # FedProx strength, only when not the default
         return (f"{self.dataset}_{self.method}_{a}_E{self.gateways}K{self.clients_per_gateway}"
-                f"_{self.tiers}{p}{d}_s{self.seed}")
+                f"_{self.tiers}{p}{d}{u}_s{self.seed}")
 
 
 def run(cfg: Config, log=print, return_weights: bool = False, on_eval=None) -> dict:

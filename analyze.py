@@ -74,6 +74,7 @@ def load():
         rows.append(dict(
             name=r["name"], method=c["method"], alpha="iid" if c["alpha"] is None else f"{c['alpha']:g}",
             profile=c.get("profile", "colext"), dq=c.get("deadline_quantile", 0.5), dataset=c["dataset"],
+            mu=c.get("mu", 0.01),
             E=c["gateways"], K=c["clients_per_gateway"], N=c["gateways"] * c["clients_per_gateway"],
             tiers=c["tiers"], seed=c["seed"], rounds=c["rounds"], acc=fin["acc"], p10=fin["client_acc_p10"],
             cmean=fin["client_acc_mean"], sim_time=fin["sim_time"], bytes_server=fin["bytes_server"],
@@ -145,9 +146,11 @@ def main():
         return
     cifar = sel(df, dataset="cifar10")  # G6, reported in its own table
     df = sel(df, dataset="fmnist")
+    fedprox_mu = df[np.isclose(df.mu, 0.01) == False]  # noqa: E712  G7 FedProx strength
+    df = df[np.isclose(df.mu, 0.01)]
     measured = sel(df, profile="measured")
     deadlines = sel(df, profile="colext", dq=[0.75, 0.9])  # G5 deadline sensitivity
-    df = sel(df, profile="colext", dq=0.5)  # main analysis; G4 and G5 are reported separately
+    df = sel(df, profile="colext", dq=0.5)  # main analysis; G4, G5 and G7 are reported separately
     main_cfg = sel(df, E=4, K=5, tiers="mixed")
 
     # targets per alpha from centralised runs
@@ -170,11 +173,15 @@ def main():
         return frame
 
     df, measured, deadlines = add_targets(df), add_targets(measured), add_targets(deadlines)
+    fedprox_mu = add_targets(fedprox_mu)
     main_cfg = sel(df, E=4, K=5, tiers="mixed")
 
-    stats_out = {"targets": targets, "n_runs": int(len(df) + len(measured) + len(deadlines)),
+    stats_out = {"targets": targets,
+                 "n_runs": int(len(df) + len(measured) + len(deadlines) + len(fedprox_mu) + len(cifar)),
                  "target_frac": TARGET_FRAC}
-    write_summary(pd.concat([df, measured, deadlines]))
+    write_summary(pd.concat([df, measured, deadlines, fedprox_mu, cifar]))
+    stats_out["fedprox_mu"] = table_fedprox(main_cfg, fedprox_mu)
+    stats_out["label_mix"] = fig_label_mix()
     table_main(main_cfg)
     table_scaling(df)
     stats_out["deadline_sensitivity"] = table_deadline(main_cfg, deadlines)
@@ -194,13 +201,18 @@ def main():
     stats_out["measured_profile"] = measured_numbers(measured, main_cfg)
     with open(os.path.join(OUT, "stats.json"), "w") as f:
         json.dump(stats_out, f, indent=1, default=float)
-    print(f"{stats_out['n_runs'] + len(cifar)} runs analysed ({len(df)} main, {len(measured)} measured profile, "
-          f"{len(deadlines)} deadline sensitivity, {len(cifar)} CIFAR-10); "
+    print(f"{stats_out['n_runs']} runs analysed ({len(df)} main, {len(measured)} measured profile, "
+          f"{len(deadlines)} deadline sensitivity, {len(fedprox_mu)} FedProx strength, {len(cifar)} CIFAR-10); "
           f"figures in paper/figures, tables in paper/tables")
 
 
 def write_summary(df):
-    g = df.groupby(["profile", "method", "alpha", "E", "K", "tiers"])
+    """One row per configuration. Groups by every setting that varies between experiment groups
+    (dataset, device profile, deadline quantile, FedProx strength), so no row pools different groups."""
+    df = df.copy()
+    if "t_target" not in df:
+        df["t_target"] = np.nan
+    g = df.groupby(["dataset", "profile", "method", "alpha", "E", "K", "tiers", "dq", "mu"])
     agg = g.agg(n=("seed", "count"), acc=("acc", "mean"), acc_sd=("acc", "std"), p10=("p10", "mean"),
                 p10_sd=("p10", "std"), t_target=("t_target", "mean"), sim_time=("sim_time", "mean"),
                 server_MB=("bytes_server", lambda v: v.mean() / 1e6), dropped=("dropped", "mean"),
@@ -477,9 +489,9 @@ def fig_rq4(df):
             a.minorticks_off()
         at.set_xlabel(xlabel)
         aa.set_title(f"({'ab'[col]}) accuracy vs {var}", loc="left")
-        at.set_title(f"({'cd'[col]}) time per round vs {var}", loc="left")
+        at.set_title(f"({'cd'[col]}) time per edge round vs {var}", loc="left")
     axes[0, 0].set_ylabel("final test accuracy")
-    axes[1, 0].set_ylabel("sim. time / round (s)")
+    axes[1, 0].set_ylabel(r"$\bar T_r$ (s)")
     fig.tight_layout(h_pad=0.6, w_pad=1.0, rect=(0, 0.07, 1, 1))
     _legend_below(fig, axes, ncol=3)
     save(fig, "fig_rq4_scaling")
@@ -520,6 +532,83 @@ def fig_phones():
     fig.tight_layout()
     save(fig, "fig_phones")
     return {n: float(v) for n, v in zip(names, ms)}
+
+
+def table_fedprox(m, fp):
+    """G7: H-FedProx with stronger proximal terms, against H-FedAvg (mu = 0) and the default mu = 0.01."""
+    rows = [("H-FedAvg ($\\mu = 0$)", sel(m, method="hier_fedavg")),
+            ("H-FedProx, $\\mu = 0.01$", sel(m, method="hier_fedprox"))]
+    for mu in (0.1, 1.0):
+        rows.append((f"H-FedProx, $\\mu = {mu:g}$", fp[np.isclose(fp.mu, mu)]))
+    lines = [r"\setlength{\tabcolsep}{3pt}", r"\begin{tabular}{l ccc ccc}", r"\toprule",
+             r" & \multicolumn{3}{c}{$\alpha = 0.1$} & \multicolumn{3}{c}{$\alpha = 0.5$} \\",
+             r"\cmidrule(lr){2-4}\cmidrule(lr){5-7}",
+             r"Setting & Acc & P10 & $T_{\mathrm{tgt}}$ & Acc & P10 & $T_{\mathrm{tgt}}$ \\", r"\midrule"]
+    out = {}
+    for label, r in rows:
+        cells = [label]
+        for a in ("0.1", "0.5"):
+            v = sel(r, alpha=a)
+            if v.empty:
+                cells += ["--"] * 3
+                continue
+            cells += [f"{100 * v.acc.mean():.1f}", f"{100 * v.p10.mean():.1f}",
+                      f"{v.t_target.mean():.0f}" if v.t_target.notna().all() else "n.r."]
+            out[f"{label}_{a}"] = dict(acc=float(v.acc.mean()), p10=float(v.p10.mean()),
+                                       t_target=float(v.t_target.mean()), n=int(len(v)))
+        lines.append(" & ".join(cells) + r" \\")
+    lines += [r"\bottomrule", r"\end{tabular}"]
+    with open(os.path.join(TAB, "tab_fedprox.tex"), "w") as f:
+        f.write("% generated by analyze.py -- do not edit\n" + "\n".join(lines) + "\n")
+    # paired over seed x alpha against H-FedAvg
+    base = sel(m, method="hier_fedavg", alpha=["0.1", "0.5"]).set_index(["alpha", "seed"])
+    for mu in (0.1, 1.0):
+        r = fp[np.isclose(fp.mu, mu)].set_index(["alpha", "seed"])
+        for col in ("acc", "p10"):
+            j = pd.concat([r[col], base[col]], axis=1, keys=["a", "b"]).dropna()
+            if len(j) >= 2:
+                t, p = stats.ttest_rel(j.a, j.b)
+                out[f"ttest_mu{mu:g}_vs_hfedavg_{col}"] = dict(n=int(len(j)), mean_diff=float((j.a - j.b).mean()),
+                                                               t=float(t), p=float(p))
+    return out
+
+
+def fig_label_mix(seed=0, n_clients=20):
+    """Class mix of each device under the Dirichlet split used by the runs (main configuration, seed 0)."""
+    import sys
+    sys.path.insert(0, ROOT)
+    import torchvision
+    from matplotlib.colors import LinearSegmentedColormap
+    from hfl import data as D
+    labels = torchvision.datasets.FashionMNIST(os.path.join(ROOT, "data"), train=True, download=True).targets.numpy()
+    cmap = LinearSegmentedColormap.from_list("seq", ["#ffffff", "#2a78d6", "#0b3a75"])
+    alphas = [0.1, 0.5, 1.0]
+    fig, axes = plt.subplots(1, 3, figsize=(COL_W, 1.85), sharey=True)
+    out = {}
+    for ax, a in zip(axes, alphas):
+        rng = np.random.default_rng([seed, 0])  # the partition stream used by hfl.sim.run
+        parts = D.dirichlet_partition(labels, n_clients, a, rng)
+        p = np.stack([np.bincount(labels[ix], minlength=10) / len(ix) for ix in parts])
+        im = ax.imshow(p, cmap=cmap, vmin=0, vmax=1, aspect="auto", interpolation="nearest")
+        ax.set_title(rf"$\alpha = {a:g}$", loc="center")
+        ax.set_xticks(range(0, 10, 3))
+        ax.set_xlabel("class")
+        ax.grid(False)
+        for s in ax.spines.values():
+            s.set_visible(False)
+        h = -(p * np.log(np.where(p > 0, p, 1))).sum(1)  # entropy per device
+        out[f"{a:g}"] = dict(effective_classes_mean=float(np.exp(h).mean()),
+                             top2_share_mean=float(np.sort(p, 1)[:, -2:].sum(1).mean()),
+                             samples_min=int(min(len(ix) for ix in parts)),
+                             samples_max=int(max(len(ix) for ix in parts)))
+    axes[0].set_ylabel("device")
+    axes[0].set_yticks([0, 9, 19], ["1", "10", "20"])
+    cb = fig.colorbar(im, ax=axes, fraction=0.04, pad=0.02)
+    cb.set_label("share of device's samples", fontsize=6.5)
+    cb.ax.tick_params(labelsize=6)
+    cb.outline.set_visible(False)
+    save(fig, "fig_label_mix")
+    return out
 
 
 def _paired(m, a_meth, b_meth, col):
