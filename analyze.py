@@ -486,29 +486,37 @@ def fig_rq4(df):
 
 
 def fig_phones():
-    """Measured time per training step on real phones (phone_benchmark), slowest at the bottom."""
+    """Measured time per training step on real phones (phone_benchmark), slowest at the bottom.
+
+    The phones in measurements.json (the ones behind the measured device profile, G4) are highlighted.
+    """
     phones = []
     for fn, key in (("measurements.json", "phones"), ("measurements_extra.json", "phones")):
         p = os.path.join(ROOT, "phone_benchmark", fn)
         if os.path.exists(p):
-            with open(p) as f:
-                phones += json.load(f)[key]
+            with open(p, encoding="utf-8") as f:
+                for d in json.load(f)[key]:
+                    phones.append(dict(d, profile=(fn == "measurements.json")))
     if not phones:
         return None
     phones.sort(key=lambda d: d["train_step_ms_median"])
-    names = [d["phone"].replace("Samsung Galaxy ", "Galaxy ") for d in phones]
+    names = [d["phone"].replace("Samsung Galaxy ", "Galaxy ").replace("Google ", "") for d in phones]
     ms = np.array([d["train_step_ms_median"] for d in phones]) / 1000
-    fastest = ms.min()
-    fig, ax = plt.subplots(figsize=(COL_W, 0.32 * len(phones) + 0.55))
+    colors = ["#eb6834" if d["profile"] else "#2a78d6" for d in phones]
+    fig, ax = plt.subplots(figsize=(COL_W, 0.15 * len(phones) + 0.6))
     y = np.arange(len(phones))[::-1]
-    ax.barh(y, ms, height=0.6, color="#2a78d6")
+    ax.barh(y, ms, height=0.68, color=colors)
     for yi, v in zip(y, ms):
-        ax.text(v + ms.max() * 0.01, yi, f"{v:.1f} s ({v / fastest:.1f}$\\times$)", va="center", fontsize=6.5,
-                color="#0b0b0b")
-    ax.set_yticks(y, names)
-    ax.set_xlim(0, ms.max() * 1.3)
-    ax.set_xlabel("time per training step, batch 32 (s, browser CPU backend)")
+        ax.text(v + ms.max() * 0.012, yi, f"{v:.1f} s", va="center", fontsize=6, color="#0b0b0b")
+    ax.set_yticks(y, names, fontsize=6.5)
+    ax.set_ylim(-0.6, len(phones) - 0.4)
+    ax.set_xlim(0, ms.max() * 1.12)
+    ax.set_xlabel("time per training step, batch 32 (s)")
     ax.grid(axis="y", visible=False)
+    from matplotlib.patches import Patch
+    ax.legend(handles=[Patch(color="#eb6834", label="measured device profile (G4)"),
+                       Patch(color="#2a78d6", label="other phones")],
+              loc="upper right", fontsize=6, frameon=False)
     fig.tight_layout()
     save(fig, "fig_phones")
     return {n: float(v) for n, v in zip(names, ms)}

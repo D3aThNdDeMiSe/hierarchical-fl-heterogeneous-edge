@@ -37,7 +37,7 @@ This repository has the simulator we built to find that out, the 180 experiments
 | **What breaks first as it scales?** | The gateway's shared Wi-Fi, well before its CPU or memory. At 25 devices per gateway, moving the model takes longer than training it, so about 10 devices per gateway is the practical limit. |
 | **Does it hold up?** | With measured phone speeds the time saving grows to 42–57%. On CIFAR-10 the conclusions hold, with a sharper speed–accuracy trade-off under extreme skew. An int8 copy of the final model is 4× smaller (322 KB → 81 KB) and loses 0.05 points. |
 
-The phones we timed differ by **5.7×** in time per training step (Galaxy S24 Ultra 1.4 s, POCO F3 1.6 s, Redmi Note 12 4.7 s, Vivo Y31 8.1 s), more than twice the 2.3× gap reported by the phone testbed we took our defaults from.
+We timed training on 17 phones, from budget Android models to the iPhone 17 Pro Max. Leave out the fastest and slowest 10% and they still differ by **6×** in time per training step, and by 13× at the extremes (1.0 s on the iPhone 17 Pro Max, 13.9 s on a Galaxy A32). That's more than twice the 2.3× gap reported by the phone testbed we took our defaults from.
 
 ## How it works
 
@@ -77,9 +77,9 @@ Accuracy and time per round as the number of devices per gateway (K) and of gate
 
 <p align="center"><img src="docs/assets/fig_rq4_scaling.png" alt="Accuracy and round time as K and E grow" width="720"></p>
 
-Time per training step on the phones we measured.
+Time per training step on the 17 phones we measured. The orange bars are the three phones behind the measured device profile.
 
-<p align="center"><img src="docs/assets/fig_phones.png" alt="Measured time per training step on four phones" width="720"></p>
+<p align="center"><img src="docs/assets/fig_phones.png" alt="Measured time per training step on 17 phones" width="560"></p>
 
 </details>
 
@@ -151,7 +151,7 @@ python -m http.server 8000 --directory phone_benchmark
 # then open http://<your-PC-IP>:8000 on the phone
 ```
 
-The `measured` device profile reads one high, one mid and one low phone from `phone_benchmark/measurements.json`. Extra phones go in `measurements_extra.json`, which only feeds the phone-speed figure.
+The `measured` device profile reads one high, one mid and one low phone from `phone_benchmark/measurements.json`. The other 14 phones are in `measurements_extra.json`, which only feeds the phone-speed figure and also lists the two runs we excluded and why. The raw runs are in `phone_benchmark/raw/`.
 
 ## Limitations
 

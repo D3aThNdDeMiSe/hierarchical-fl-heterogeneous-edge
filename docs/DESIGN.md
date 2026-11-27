@@ -149,6 +149,10 @@ maximum local computation. Evaluation happens at every global sync (flat: every 
 
 Phone measurements (TF.js CPU backend, batch 32, median ms/step; inference ms/sample):
 POCO F3 1,607 / 3.8; Redmi Note 12 4,665 / 9.3; Vivo Y31 8,124 / 25.5.
+14 more phones are in `phone_benchmark/measurements_extra.json` (17 in total; raw runs and the two
+excluded ones in `phone_benchmark/raw/`). Across all 17: 1.0-13.9 s per step, a 6.0x spread between
+the 10th and 90th percentile; fast/middle/slow groups of 5/7/5 phones have median ratios
+1 : 2.2 : 5.5, close to the three-phone profile above, so G4 keeps that profile.
 
 Results are reported as mean ± std over seeds; method differences are checked with paired
 t-tests over seeds and α settings.

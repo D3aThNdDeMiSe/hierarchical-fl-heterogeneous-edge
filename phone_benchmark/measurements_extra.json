@@ -1,6 +1,155 @@
 {
- "note": "Additional phones measured with phone_benchmark (TF.js CPU backend, batch 32, SmallCNN 80,602 params). Kept apart from measurements.json, which feeds the G4 runs. Used for the phone-speed figure and, if the tiers change, a separate measured profile.",
+ "note": "Additional phones measured with phone_benchmark (TF.js CPU backend, batch 32, SmallCNN 80,602 params), one run each, measured by friends on their own phones. Kept apart from measurements.json, which feeds the G4 runs; used for the phone-speed figure. Raw results, including two excluded runs, are in raw/.",
  "phones": [
-  {"phone": "Samsung Galaxy S24 Ultra", "train_step_ms_median": 1430.0, "train_step_ms_min": 1379.8, "train_steps_measured": 30, "infer_ms_median": 3.3, "threads": 8, "browser": "Chrome 158", "date": "2026-11-27"}
+  {
+   "phone": "Samsung Galaxy S24 Ultra",
+   "train_step_ms_median": 1430.0,
+   "train_step_ms_min": 1379.8,
+   "train_steps_measured": 30,
+   "infer_ms_median": 3.3,
+   "threads": 8,
+   "browser": "Chrome 158",
+   "date": "2026-11-27"
+  },
+  {
+   "phone": "Infinix Note 11 Pro",
+   "train_step_ms_median": 4156.4,
+   "train_step_ms_min": 3811.6,
+   "train_steps_measured": 11,
+   "infer_ms_median": 7.05,
+   "threads": 8,
+   "browser": "Chrome 158",
+   "date": "2026-11-27"
+  },
+  {
+   "phone": "Google Pixel 8",
+   "train_step_ms_median": 1970.7,
+   "train_step_ms_min": 1812,
+   "train_steps_measured": 23,
+   "infer_ms_median": 4.25,
+   "threads": 9,
+   "browser": "Chrome 154",
+   "date": "2026-11-27"
+  },
+  {
+   "phone": "Tecno Camon 16 Premier",
+   "train_step_ms_median": 7882.8,
+   "train_step_ms_min": 3862,
+   "train_steps_measured": 6,
+   "infer_ms_median": 7.25,
+   "threads": 8,
+   "browser": "Chrome 158",
+   "date": "2026-11-27"
+  },
+  {
+   "phone": "iPhone 13 Pro",
+   "train_step_ms_median": 1656.5,
+   "train_step_ms_min": 1498,
+   "train_steps_measured": 28,
+   "infer_ms_median": 3,
+   "threads": 4,
+   "browser": "Safari 26.5.2",
+   "date": "2026-11-27"
+  },
+  {
+   "phone": "iPhone 17 (1)",
+   "train_step_ms_median": 1715.5,
+   "train_step_ms_min": 1641,
+   "train_steps_measured": 20,
+   "infer_ms_median": 3,
+   "threads": 4,
+   "browser": "Safari 26.6.1",
+   "date": "2026-11-27"
+  },
+  {
+   "phone": "Huawei nova 7i",
+   "train_step_ms_median": 4481.9,
+   "train_step_ms_min": 4405.8,
+   "train_steps_measured": 8,
+   "infer_ms_median": 76.35,
+   "threads": 8,
+   "browser": "Huawei Browser 17",
+   "date": "2026-11-27"
+  },
+  {
+   "phone": "iPhone 17 (2)",
+   "train_step_ms_median": 1183,
+   "train_step_ms_min": 1087,
+   "train_steps_measured": 29,
+   "infer_ms_median": 1,
+   "threads": 4,
+   "browser": "Safari 27.2",
+   "date": "2026-11-27"
+  },
+  {
+   "phone": "Google Pixel 6 Pro",
+   "train_step_ms_median": 3321.7,
+   "train_step_ms_min": 3042.2,
+   "train_steps_measured": 9,
+   "infer_ms_median": 53,
+   "threads": 8,
+   "browser": "Chrome 158",
+   "date": "2026-11-27"
+  },
+  {
+   "phone": "Samsung Galaxy A72",
+   "train_step_ms_median": 3196,
+   "train_step_ms_min": 3155.7,
+   "train_steps_measured": 14,
+   "infer_ms_median": 6.7,
+   "threads": 8,
+   "browser": "Chrome 158",
+   "date": "2026-11-27"
+  },
+  {
+   "phone": "Redmi Note 9S",
+   "train_step_ms_median": 3121.8,
+   "train_step_ms_min": 2977.1,
+   "train_steps_measured": 15,
+   "infer_ms_median": 6.1,
+   "threads": 8,
+   "browser": "Chrome 155",
+   "date": "2026-11-27"
+  },
+  {
+   "phone": "Tecno Pova",
+   "train_step_ms_median": 5119,
+   "train_step_ms_min": 4472,
+   "train_steps_measured": 9,
+   "infer_ms_median": 9.6,
+   "threads": 8,
+   "browser": "Chrome 158",
+   "date": "2026-11-27"
+  },
+  {
+   "phone": "Samsung Galaxy A32",
+   "train_step_ms_median": 13865.6,
+   "train_step_ms_min": 8807.9,
+   "train_steps_measured": 4,
+   "infer_ms_median": 9.85,
+   "threads": 8,
+   "browser": "Chrome 157",
+   "date": "2026-11-27"
+  },
+  {
+   "phone": "iPhone 17 Pro Max",
+   "train_step_ms_median": 1036.5,
+   "train_step_ms_min": 975,
+   "train_steps_measured": 30,
+   "infer_ms_median": 2,
+   "threads": 4,
+   "browser": "Chrome 158 (iOS)",
+   "date": "2026-11-27"
+  }
+ ],
+ "excluded": [
+  {
+   "phone": "iphone 11",
+   "reason": "reported 8 threads and an Android Chrome user agent, while every iPhone reports 4 threads and an iOS browser; probably not an iPhone 11"
+  },
+  {
+   "phone": "Galaxy S26 Ultra",
+   "reason": "3,892 ms per step, 2.7x slower than the Galaxy S24 Ultra, with near-constant step times; most likely a power-saving mode"
+  }
  ]
 }

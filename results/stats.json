@@ -164,10 +164,23 @@
   }
  },
  "phones_step_s": {
+  "iPhone 17 Pro Max": 1.0365,
+  "iPhone 17 (2)": 1.183,
   "Galaxy S24 Ultra": 1.43,
   "Xiaomi POCO F3": 1.6065999999999998,
+  "iPhone 13 Pro": 1.6565,
+  "iPhone 17 (1)": 1.7155,
+  "Pixel 8": 1.9707000000000001,
+  "Redmi Note 9S": 3.1218000000000004,
+  "Galaxy A72": 3.196,
+  "Pixel 6 Pro": 3.3217,
+  "Infinix Note 11 Pro": 4.1564,
+  "Huawei nova 7i": 4.4818999999999996,
   "Redmi Note 12": 4.6648000000000005,
-  "Vivo Y31": 8.1242
+  "Tecno Pova": 5.119,
+  "Tecno Camon 16 Premier": 7.8828000000000005,
+  "Vivo Y31": 8.1242,
+  "Galaxy A32": 13.8656
  },
  "ttest_proposed_vs_hfedavg_acc": {
   "n": 9,
