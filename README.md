@@ -8,6 +8,7 @@
   <img src="https://img.shields.io/badge/TensorFlow.js-phone%20benchmark-FF6F00?logo=tensorflow&logoColor=white" alt="TensorFlow.js phone benchmark">
   <img src="https://img.shields.io/badge/paper-IEEE%20format-00629B?logo=latex&logoColor=white" alt="IEEE-format paper">
   <img src="https://img.shields.io/badge/experiments-180%20runs-C8235A" alt="180 experiment runs">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-4A4552" alt="MIT license"></a>
 </p>
 
 <p align="center">
@@ -173,3 +174,7 @@ The gateways are emulated from Raspberry Pi 4 specifications rather than measure
 ## Authors
 
 **Immad Shah** and **Sarim Mansoor**, Department of Artificial Intelligence, FAST-NUCES Islamabad. Built for the Edge Computing course (R&D track), Fall 2026.
+
+## License
+
+Code and results are released under the [MIT License](LICENSE).

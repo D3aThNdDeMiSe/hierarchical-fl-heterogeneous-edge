@@ -10,6 +10,7 @@ authors:
     given-names: Sarim
     affiliation: "Department of Artificial Intelligence, FAST-NUCES Islamabad"
 repository-code: "https://github.com/D3aThNdDeMiSe/hierarchical-fl-heterogeneous-edge"
+license: MIT
 keywords:
   - federated learning
   - hierarchical federated learning
